@@ -13,6 +13,7 @@
     "build": "npm run build --workspace=apps/web && npm run build --workspace=apps/api",
     "build:web": "npm run build --workspace=apps/web",
     "build:api": "npm run build --workspace=apps/api",
+    "start": "node apps/api/dist/index.js",
     "db:migrate": "prisma migrate deploy --schema prisma/schema.prisma",
     "db:seed": "npm run seed --workspace=packages/shared",
     "db:generate": "prisma generate --schema prisma/schema.prisma"
