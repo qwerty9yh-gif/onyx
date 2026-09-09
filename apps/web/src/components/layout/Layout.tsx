@@ -34,9 +34,9 @@ export const Layout: React.FC = () => {
       {isCashier && (
         <nav className="cashier-dock md:hidden" aria-label="Cashier navigation">
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
-          <NavLink to="/sales"><Receipt size={20} /><span>Transactions</span></NavLink>
+          <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
-          <NavLink to="/purchases"><Truck size={20} /><span>Incoming</span></NavLink>
+          <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
         </nav>
       )}

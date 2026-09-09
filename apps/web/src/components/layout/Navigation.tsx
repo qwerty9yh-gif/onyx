@@ -43,9 +43,11 @@ export const Navigation: React.FC = () => {
     <nav className="flex-1 overflow-y-auto py-4">
       <NavItem to="/dashboard" icon={<LayoutDashboard size={18} />} label="Dashboard" />
       <NavItem to="/sales" icon={<ShoppingCart size={18} />} label="POS / Sales" />
+      <NavItem to="/transactions" icon={<FileText size={18} />} label="Transactions" />
       {!isCashier && <NavItem to="/products" icon={<Package size={18} />} label="Products" />}
       {!isCashier && <NavItem to="/purchases" icon={<ShoppingBasket size={18} />} label="Purchases" />}
       {!isCashier && <NavItem to="/inventory" icon={<Package size={18} />} label="Inventory" />}
+      {me?.role === 'ADMIN' && <NavItem to="/incoming" icon={<ShoppingBasket size={18} />} label="Incoming Goods" />}
       <NavItem to="/customers" icon={<Users size={18} />} label="Customers" />
       {!isCashier && <NavItem to="/suppliers" icon={<ShoppingBasket size={18} />} label="Suppliers" />}
       {!isCashier && <NavItem to="/categories" icon={<FileText size={18} />} label="Categories" />}

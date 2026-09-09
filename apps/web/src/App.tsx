@@ -24,6 +24,8 @@ import { AnalyticsPage } from './pages/analytics/AnalyticsPage';
 import { UsersPage } from './pages/users/UsersPage';
 import { SettingsPage } from './pages/settings/SettingsPage';
 import { SyncPage } from './pages/SyncPage';
+import { TransactionsPage } from './pages/transactions/TransactionsPage';
+import { IncomingPage } from './pages/incoming/IncomingPage';
 
 const RequireAuth = () => {
   const location = useLocation();
@@ -68,6 +70,7 @@ function App() {
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/sales" element={<SalesPage />} />
+          <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/sales/:id/receipt" element={<ReceiptPage />} />
           <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'INVENTORY_STAFF']} />}>
             <Route path="/products" element={<ProductsPage />} />
@@ -94,6 +97,7 @@ function App() {
           <Route element={<RequireRole roles={['ADMIN']} />}>
             <Route path="/users" element={<UsersPage />} />
             <Route path="/settings" element={<SettingsPage />} />
+            <Route path="/incoming" element={<IncomingPage />} />
           </Route>
         </Route>
       </Route>
