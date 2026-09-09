@@ -1,8 +1,8 @@
 import { api } from './api';
 import { User } from './types';
 
-export const TOKEN_KEY = 'pos_token';
-export const USER_KEY = 'pos_user';
+export const TOKEN_KEY = 'onyx_token';
+export const USER_KEY = 'onyx_user';
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY);
@@ -30,6 +30,16 @@ export function setUser(user: User): void {
 
 export async function login(email: string, password: string) {
   const res = await api.post('/auth/login', { email, password });
+  const { token, user } = res.data.data;
+  setToken(token);
+  setUser(user);
+  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  return user;
+}
+
+/** ONYX card login: pick a user card, then enter only the password. */
+export async function loginByCard(userId: string, password: string) {
+  const res = await api.post('/auth/card-login', { userId, password });
   const { token, user } = res.data.data;
   setToken(token);
   setUser(user);

@@ -204,6 +204,13 @@ export interface Business {
   logo?: string;
 }
 
+export interface AuditLogEntry {
+  id: string;
+  action: string;
+  createdAt: string;
+  user?: { firstName?: string; lastName?: string } | null;
+}
+
 export interface DashboardStats {
   today: { sales: number; revenue: number };
   week: { sales: number; revenue: number };
@@ -211,6 +218,8 @@ export interface DashboardStats {
   totalTransactions: number;
   avgTransaction: number;
   lowStock: number;
+  outOfStock?: number;
+  pendingInvoices?: number;
   topProducts: Array<{
     id: string;
     name: string;
@@ -220,4 +229,5 @@ export interface DashboardStats {
     total: number;
   }>;
   topCategories: Array<Record<string, unknown>>;
+  recentActivity?: AuditLogEntry[];
 }

@@ -30,7 +30,7 @@ export const TopBar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
         <Menu size={20} />
       </button>
       <div className="flex-1 px-4">
-        <h1 className="text-lg font-semibold text-gray-800">New Project POS</h1>
+        <h1 className="text-lg font-semibold text-gray-800">ONYX POS System</h1>
       </div>
       <div className="flex items-center gap-4">
         {me && (

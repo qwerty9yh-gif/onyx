@@ -37,6 +37,8 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
         { sku: { contains: s, mode: 'insensitive' } },
         { barcode: { contains: s, mode: 'insensitive' } },
         { description: { contains: s, mode: 'insensitive' } },
+        { localId: { contains: s, mode: 'insensitive' } },
+        { category: { is: { name: { contains: s, mode: 'insensitive' } } } },
       ];
     }
     if (categoryId) where.categoryId = categoryId;

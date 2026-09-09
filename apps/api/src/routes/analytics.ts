@@ -15,7 +15,7 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
     const startOfMonth = new Date();
     startOfMonth.setDate(1);
     startOfMonth.setHours(0, 0, 0, 0);
-    const [todaySales, weekSales, monthSales, todayRevenue, weekRevenue, monthRevenue, totalTransactions, avgTransaction, lowStock, topProducts, topCategories] = await Promise.all([
+    const [todaySales, weekSales, monthSales, todayRevenue, weekRevenue, monthRevenue, totalTransactions, avgTransaction, lowStock, outOfStock, pendingInvoices, topProducts, topCategories, recentActivity] = await Promise.all([
       prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } } }),
       prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } } }),
       prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } } }),
@@ -25,8 +25,11 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
       prisma.sale.count({ where: { status: 'COMPLETED' } }),
       prisma.sale.aggregate({ where: { status: 'COMPLETED' }, _avg: { total: true } }),
       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10, gt: 0 } } }),
+      prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: 0 } }),
+      prisma.sale.count({ where: { status: 'PENDING' } }),
       prisma.saleItem.groupBy({ by: ['productId'], _sum: { quantity: true, total: true }, orderBy: { _sum: { total: 'desc' } }, take: 10, where: { sale: { status: 'COMPLETED' } } }),
-      prisma.saleItem.groupBy({ by: ['productId'], _count: true, orderBy: { _count: { productId: 'desc' } }, take: 10 })
+      prisma.saleItem.groupBy({ by: ['productId'], _count: true, orderBy: { _count: { productId: 'desc' } }, take: 10 }),
+      prisma.auditLog.findMany({ orderBy: { createdAt: 'desc' }, take: 10, include: { user: { select: { firstName: true, lastName: true } } } })
     ]);
     const topProductsData = await Promise.all(topProducts.map(async (item) => {
       const p = await prisma.product.findUnique({ where: { id: item.productId }, select: { id: true, name: true, image: true, sku: true } });
@@ -39,8 +42,11 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
       totalTransactions,
       avgTransaction: avgTransaction._avg.total || 0,
       lowStock,
+      outOfStock,
+      pendingInvoices,
       topProducts: topProductsData,
-      topCategories: topCategories.slice(0, 5)
+      topCategories: topCategories.slice(0, 5),
+      recentActivity
     } });
   } catch (err) { next(err); }
 });

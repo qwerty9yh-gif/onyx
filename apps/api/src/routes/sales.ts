@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthenticatedRequest } from '../types/index.js';
-import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
+import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateInvoiceNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
 
 const router = Router();
 
@@ -17,7 +17,7 @@ interface SaleItemInput {
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
-    const { customerId, paymentMethod, amountReceived, notes } = req.body;
+    const { customerId, paymentMethod, amountReceived, notes, markPaid = true } = req.body;
     const items = (req.body.items || []) as SaleItemInput[];
     if (!items.length) throw new AppError('Items required', 400);
     if (!paymentMethod) throw new AppError('Payment method required', 400);
@@ -29,7 +29,7 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
     for (const item of items) {
       const p = products.find((x) => x?.id === item.productId);
       if (!p || p.status !== 'ACTIVE') throw new AppError('Product unavailable', 400);
-      if (p.stockQuantity < item.quantity) throw new AppError('Insufficient stock', 400);
+      if (markPaid && p.stockQuantity < item.quantity) throw new AppError('Insufficient stock', 400);
     }
     const business = await prisma.business.findFirst({ select: { taxRate: true } });
     const taxRate = business?.taxRate || 0;
@@ -44,16 +44,17 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
     const totalDiscount = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.discount, 0));
     const totalTax = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.tax, 0));
     const grandTotal = calculateTotal(rawSubtotal, totalDiscount, totalTax);
-    if (amountReceived < grandTotal) throw new AppError('Insufficient payment', 400);
-    const change = roundToTwoDecimals(amountReceived - grandTotal);
-    const receiptNumber = generateReceiptNumber();
+    const received = markPaid ? Number(amountReceived || 0) : 0;
+    if (markPaid && received < grandTotal) throw new AppError('Insufficient payment', 400);
+    const change = markPaid ? roundToTwoDecimals(received - grandTotal) : 0;
+    const receiptNumber = markPaid ? generateReceiptNumber() : generateInvoiceNumber();
     const now = new Date();
     const sale = await prisma.sale.create({
       data: {
-        receiptNumber, cashierId: req.user!.id, customerId, status: 'COMPLETED',
+        receiptNumber, cashierId: req.user!.id, customerId, status: markPaid ? 'COMPLETED' : 'PENDING',
         syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',
-        tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes,
-        deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: now, createdAt: now
+        tax: totalTax, total: grandTotal, paymentMethod, amountReceived: received, change, notes,
+        deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: markPaid ? now : null, createdAt: now
       }
     });
     await prisma.saleItem.createMany({
@@ -62,11 +63,13 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
         unitPrice: i.unitPrice, subtotal: i.subtotal, discount: i.discount, tax: i.tax, total: i.total
       }))
     });
-    await prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: amountReceived } });
-    await Promise.all(itemsSnap.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
-    await Promise.all(itemsSnap.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } })));
-    if (customerId) await prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SALE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod } } });
+    if (markPaid) {
+      await prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: received } });
+      await Promise.all(itemsSnap.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+      await Promise.all(itemsSnap.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } })));
+      if (customerId) await prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
+    }
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: markPaid ? 'CREATE_SALE' : 'CREATE_INVOICE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod, status: sale.status } } });
     await prisma.syncOperation.create({
       data: {
         userId: req.user!.id, entity: 'sale', entityId: sale.id, operationType: 'create',
@@ -74,7 +77,38 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
         status: 'PENDING', localId: localIdFinal, serverId: sale.id, idempotencyKey
       }
     });
-    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod, createdAt: sale.createdAt }, receiptNumber, message: 'Sale completed' });
+    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod, createdAt: sale.createdAt }, receiptNumber, message: markPaid ? 'Sale completed' : 'Invoice saved as unpaid' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/sales/:id/mark-paid - Convert an unpaid invoice into a paid sale
+router.post('/:id/mark-paid', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { paymentMethod, amountReceived } = req.body;
+    const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true, customer: true } });
+    if (!s) throw new AppError('Not found', 404);
+    if (s.status === 'COMPLETED') return res.json({ success: true, data: s, message: 'Already paid' });
+    if (s.status !== 'PENDING') throw new AppError('Cannot mark paid', 400);
+    const received = Number(amountReceived || s.total);
+    if (received < s.total) throw new AppError('Insufficient payment', 400);
+    const products = await Promise.all(s.items.map((i) => prisma.product.findUnique({ where: { id: i.productId } })));
+    for (const item of s.items) {
+      const p = products.find((x) => x?.id === item.productId);
+      if (!p || p.status !== 'ACTIVE') throw new AppError('Product unavailable', 400);
+      if (p.stockQuantity < item.quantity) throw new AppError('Insufficient stock', 400);
+    }
+    const now = new Date();
+    const updated = await prisma.sale.update({
+      where: { id: s.id },
+      data: { status: 'COMPLETED', paymentMethod: paymentMethod || s.paymentMethod, amountReceived: received, change: roundToTwoDecimals(received - s.total), completedAt: now },
+    });
+    await prisma.payment.create({ data: { saleId: s.id, method: paymentMethod || s.paymentMethod, amount: received } });
+    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: s.id, notes: `Sale ${s.receiptNumber}` } })));
+    if (s.customerId) await prisma.customer.update({ where: { id: s.customerId }, data: { totalSpent: { increment: s.total }, lastPurchase: now } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'MARK_PAID', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total, paymentMethod } } });
+    res.json({ success: true, data: updated, message: 'Invoice marked as paid' });
   } catch (err) { next(err); }
 });
 
@@ -85,12 +119,22 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
     if (req.query.status) where.status = req.query.status;
     if (req.query.cashierId) where.cashierId = req.query.cashierId;
     if (['CASHIER'].includes(req.user?.role || '')) where.cashierId = req.user!.id;
+    if (req.query.search) {
+      const s = req.query.search as string;
+      where.OR = [
+        { receiptNumber: { contains: s, mode: 'insensitive' } },
+        { cashier: { is: { firstName: { contains: s, mode: 'insensitive' } } } },
+        { cashier: { is: { lastName: { contains: s, mode: 'insensitive' } } } },
+        { customer: { is: { name: { contains: s, mode: 'insensitive' } } } },
+      ];
+    }
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 50;
     const [sales, total] = await Promise.all([
       prisma.sale.findMany({
         where, include: {
           cashier: { select: { id: true, firstName: true, lastName: true } },
+          customer: { select: { id: true, name: true } },
           items: true, payments: true
         },
         orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit

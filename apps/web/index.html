@@ -2,10 +2,97 @@
 <html lang="en">
 <head>
 	<meta charset="UTF-8" />
-	<meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<title>POS</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1, user-scalable=no" />
+	<meta name="description" content="ONYX POS System — premium point of sale, inventory, invoicing and analytics." />
+	<meta name="theme-color" content="#dc2626" />
+	<meta name="apple-mobile-web-app-capable" content="yes" />
+	<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+	<meta name="mobile-web-app-capable" content="yes" />
+	<meta name="application-name" content="ONYX POS System" />
+	<meta name="msapplication-TileColor" content="#dc2626" />
+	<meta name="msapplication-TileImage" content="/icons/icon-144.png" />
+	<link rel="manifest" href="/manifest.webmanifest" />
+	<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
+	<link rel="icon" type="image/png" sizes="48x48" href="/icons/icon-48.png" />
+	<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+	<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
+	<link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png" />
+	<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
+	<link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+	<title>ONYX POS System</title>
+	<style>
+		/* Splash screen: rendered before the app boots, faded out by main.tsx */
+		#onyx-splash {
+			position: fixed;
+			inset: 0;
+			z-index: 9999;
+			display: flex;
+			flex-direction: column;
+			align-items: center;
+			justify-content: center;
+			gap: 22px;
+			background:
+				radial-gradient(circle at 50% 38%, rgba(220, 38, 38, 0.16) 0, transparent 42%),
+				linear-gradient(180deg, #fff7f4 0%, #fdeeee 45%, #f5ecea 100%);
+			transition: opacity 0.45s ease;
+		}
+		#onyx-splash img {
+			width: 120px;
+			height: 120px;
+			border-radius: 32px;
+			box-shadow: 0 18px 50px rgba(136, 19, 55, 0.25);
+			animation: onyxSplashPulse 1.6s ease-in-out infinite;
+		}
+		#onyx-splash h1 {
+			font-size: 30px;
+			font-weight: 800;
+			letter-spacing: 0.02em;
+			background: linear-gradient(120deg, #b91c1c 0%, #dc2626 45%, #ef4444 100%);
+			-webkit-background-clip: text;
+			background-clip: text;
+			color: transparent;
+		}
+		#onyx-splash p {
+			color: #7a7570;
+			font-size: 14px;
+			letter-spacing: 0.28em;
+			text-transform: uppercase;
+		}
+		#onyx-splash-bar {
+			position: relative;
+			overflow: hidden;
+			width: 220px;
+			height: 6px;
+			border-radius: 999px;
+			background: rgba(220, 38, 38, 0.18);
+		}
+		#onyx-splash-bar::after {
+			content: '';
+			position: absolute;
+			inset: 0;
+			border-radius: 999px;
+			background: linear-gradient(90deg, #fecdd3, #dc2626, #881337, #dc2626, #fecdd3);
+			background-size: 200% 100%;
+			animation: onyxShimmer 1.3s ease-in-out infinite;
+		}
+		@keyframes onyxSplashPulse {
+			0%, 100% { transform: scale(1); opacity: 1; }
+			50% { transform: scale(1.06); opacity: 0.9; }
+		}
+		@keyframes onyxShimmer {
+			0% { background-position: 0% 50%; }
+			100% { background-position: 200% 50%; }
+		}
+	</style>
 </head>
 <body>
+	<div id="onyx-splash" role="status" aria-label="Loading ONYX POS System">
+		<img src="/icons/icon-512.png" alt="ONYX POS System icon" onerror="this.style.display='none'" />
+		<h1>ONYX</h1>
+		<p>POS System</p>
+		<div id="onyx-splash-bar"></div>
+	</div>
 	<div id="root"></div>
 	<script type="module" src="/src/main.tsx"></script>
 </body>

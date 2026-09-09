@@ -1,7 +1,8 @@
 {
-  "name": "new-project",
+  "name": "onyx-pos-system",
   "version": "1.0.0",
   "private": true,
+  "description": "ONYX POS System — premium point of sale, inventory, invoicing and analytics.",
   "workspaces": [
     "apps/*",
     "packages/*"

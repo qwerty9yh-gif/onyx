@@ -1,11 +1,11 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Banknote, CreditCard, Minus, Plus, Printer, Search, ShoppingCart, Trash2, Wifi, WifiOff } from 'lucide-react';
+import { Banknote, CreditCard, CheckCircle, FileText, Minus, Plus, Printer, Search, ShoppingCart, Trash2, Wifi, WifiOff } from 'lucide-react';
 import { api } from '../../lib/api';
-import type { Product } from '../../lib/types';
+import type { Product, Sale, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { clearCart, loadCart, loadProducts, loadQueue, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
-import { printReceipt } from '../../lib/printer';
+import { printInvoice, printReceipt, InvoiceData, ReceiptData } from '../../lib/printer';
 
 interface CartItem {
   productId: string;
@@ -26,7 +26,14 @@ export const SalesPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
+  const [lastSale, setLastSale] = useState<Sale | null>(null);
   const queryClient = useQueryClient();
+
+  const { data: me } = useQuery<User>({
+    queryKey: ['me'],
+    queryFn: () => api.get('/auth/me').then((res) => res.data.data),
+    retry: false,
+  });
 
   useEffect(() => saveCart(cart), [cart]);
   useEffect(() => {
@@ -91,39 +98,90 @@ export const SalesPage: React.FC = () => {
     }));
   };
 
-  const checkout = useMutation({
+  const buildReceiptData = (receiptNumber: string, markPaid: boolean): ReceiptData => ({
+    storeName: 'ONYX POS System',
+    receiptNumber,
+    cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
+    createdAt: new Date().toLocaleString(),
+    lines: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.unitPrice * item.quantity })),
+    subtotal,
+    discount: 0,
+    tax,
+    total,
+    paymentMethod,
+    amountReceived: markPaid ? received : 0,
+    change: markPaid ? change : 0,
+  });
+
+  const buildInvoiceData = (invoiceNumber: string): InvoiceData => ({
+    storeName: 'ONYX POS System',
+    invoiceNumber,
+    cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
+    createdAt: new Date().toLocaleString(),
+    lines: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.unitPrice * item.quantity })),
+    subtotal,
+    discount: 0,
+    tax,
+    total,
+  });
+
+  const markPaidMutation = useMutation({
     mutationFn: async () => {
       const payload = {
-        items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'fixed' })),
+        items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'percentage' })),
         paymentMethod,
         amountReceived: received,
-        notes: online ? '' : 'Queued offline',
+        markPaid: true,
       };
       if (!online) {
         queueSale(payload);
-        return { data: { data: { receiptNumber: `OFF-${Date.now()}` } } };
+        return { receiptNumber: `OFF-${Date.now()}` };
       }
-      return api.post('/sales', payload);
+      const result = await api.post('/sales', payload);
+      return { receiptNumber: result.data.data.receiptNumber as string };
     },
-    onSuccess: async (response) => {
-      await printReceipt({
-        storeName: 'ONYX POS',
-        receiptNumber: response.data.data.receiptNumber,
-        cashier: 'Cashier',
-        createdAt: new Date().toLocaleString(),
-        lines: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.unitPrice * item.quantity })),
-        subtotal,
-        discount: 0,
-        tax,
-        total,
-        paymentMethod,
-        amountReceived: received,
-        change,
-      });
+    onSuccess: (res) => {
+      const receiptNumber = res.receiptNumber;
+      if (!receiptNumber.startsWith('OFF-')) {
+        printReceipt(buildReceiptData(receiptNumber, true));
+      }
       clearCart();
       setCart([]);
       setAmountReceived('');
-      queryClient.invalidateQueries({ queryKey: ['sales'] });
+      queryClient.invalidateQueries({ queryKey: ['products-search'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+    },
+  });
+
+  const saveUnpaidMutation = useMutation({
+    mutationFn: async () => {
+      const payload = {
+        items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'percentage' })),
+        paymentMethod,
+        amountReceived: 0,
+        markPaid: false,
+      };
+      if (!online) {
+        queueSale(payload);
+        return { receiptNumber: `OFF-${Date.now()}` };
+      }
+      const result = await api.post('/sales', payload);
+      return { receiptNumber: result.data.data.receiptNumber as string };
+    },
+    onSuccess: (res) => {
+      const receiptNumber = res.receiptNumber;
+      if (!receiptNumber.startsWith('OFF-')) {
+        printInvoice(buildInvoiceData(receiptNumber));
+      }
+      clearCart();
+      setCart([]);
+      setAmountReceived('');
+      queryClient.invalidateQueries({ queryKey: ['products-search'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
 
@@ -169,8 +227,12 @@ export const SalesPage: React.FC = () => {
           <div className="mt-5 grid grid-cols-2 gap-2">{(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => <button type="button" key={method} onClick={() => setPaymentMethod(method)} className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'bg-sky-600 text-white shadow-lg shadow-sky-200' : 'bg-slate-100 text-slate-600'}`}>{method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}{method}</button>)}</div>
           <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-slate-100 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-sky-300" />
           <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className="text-emerald-600">{money(change)}</span></div>
-          <Button className="mt-5 h-14 w-full rounded-2xl bg-sky-600 text-lg hover:bg-sky-700" loading={checkout.isPending} disabled={!cart.length || received < total} onClick={() => checkout.mutate()}><Printer className="mr-2" size={20} />Complete sale & print</Button>
-          {checkout.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">Sale could not be completed. It remains in your cart.</p>}
+          <div className="mt-5 grid grid-cols-2 gap-3">
+            <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total} onClick={() => markPaidMutation.mutate()}><CheckCircle className="mr-2" size={20} />Mark as Paid</Button>
+            <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600" loading={saveUnpaidMutation.isPending} disabled={!cart.length} onClick={() => saveUnpaidMutation.mutate()}><FileText className="mr-2" size={20} />Save as Unpaid</Button>
+          </div>
+          {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">Sale could not be completed. It remains in your cart.</p>}
+          {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">Invoice could not be saved. It remains in your cart.</p>}
         </aside>
       </div>
     </div>

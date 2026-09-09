@@ -1,8 +1,9 @@
 {
-  "name": "new-project-web",
+  "name": "onyx-pos-web",
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "ONYX POS System — web application",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",

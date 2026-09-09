@@ -1,6 +1,35 @@
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
+
+// Default ONYX POS System accounts (idempotent upsert).
+// Password: Onyx@2026 for all demo accounts.
+const defaultUsers: Array<{
+  email: string;
+  username: string;
+  firstName: string;
+  lastName: string;
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'INVENTORY_STAFF';
+  password: string;
+}> = [
+  { email: 'admin@onyx.com', username: 'onyx.admin', firstName: 'Onyx', lastName: 'Administrator', role: 'ADMIN', password: 'Onyx@2026' },
+  { email: 'manager@onyx.com', username: 'onyx.manager', firstName: 'Store', lastName: 'Manager', role: 'MANAGER', password: 'Onyx@2026' },
+  { email: 'cashier@onyx.com', username: 'onyx.cashier', firstName: 'Front', lastName: 'Cashier', role: 'CASHIER', password: 'Onyx@2026' },
+  { email: 'stock@onyx.com', username: 'onyx.stock', firstName: 'Stock', lastName: 'Keeper', role: 'INVENTORY_STAFF', password: 'Onyx@2026' },
+];
+
+async function seedUsers() {
+  for (const u of defaultUsers) {
+    const passwordHash = await bcrypt.hash(u.password, 12);
+    await prisma.user.upsert({
+      where: { email: u.email },
+      update: { role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash },
+      create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash },
+    });
+  }
+  console.log('Default ONYX users ready (password: Onyx@2026)');
+}
 
 type CatalogItem = [name: string, price: number | null];
 
@@ -32,6 +61,7 @@ function slug(value: string): string {
 }
 
 async function main() {
+  await seedUsers();
   let imported = 0;
   for (const [categoryName, items] of Object.entries(catalog)) {
     const category = await prisma.category.upsert({ where: { id: `catalog-${slug(categoryName).toLowerCase()}` }, update: { name: categoryName, isActive: true }, create: { id: `catalog-${slug(categoryName).toLowerCase()}`, name: categoryName, isActive: true } });

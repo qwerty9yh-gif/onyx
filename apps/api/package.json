@@ -1,8 +1,9 @@
 {
-  "name": "new-project-api",
+  "name": "onyx-pos-api",
   "private": true,
   "version": "1.0.0",
   "type": "module",
+  "description": "ONYX POS System — API server",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

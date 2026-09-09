@@ -66,7 +66,7 @@ app.use((req, res, next) => {
 
 // API Routes
 app.get('/', (_req, res) => {
-  res.json({ name: 'onyx-api', status: 'ok', health: '/api/health' });
+  res.json({ name: 'ONYX POS System API', status: 'ok', health: '/api/health' });
 });
 app.use('/api/auth', authRouter);
 app.use('/api/health', healthRouter);
