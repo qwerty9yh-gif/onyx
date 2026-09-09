@@ -21,7 +21,7 @@ button, input, select {
 }
 
 .cashier-surface {
-  background: linear-gradient(135deg, rgba(239, 248, 255, .96), rgba(226, 239, 250, .9));
+  background: linear-gradient(135deg, rgba(255, 247, 247, .98), rgba(248, 250, 252, .94));
 }
 
 .cashier-dock {
@@ -49,13 +49,13 @@ button, input, select {
   align-items: center;
   justify-content: center;
   gap: 3px;
-  color: #66809a;
+  color: #64748b;
   font-size: 10px;
   font-weight: 700;
   text-decoration: none;
 }
 
-.cashier-dock a.active { color: #1976a8; }
+.cashier-dock a.active { color: #dc2626; }
 .cashier-dock .cashier-dock-sale {
   width: 64px;
   height: 64px;
@@ -63,8 +63,8 @@ button, input, select {
   border: 4px solid #eef5fb;
   border-radius: 50%;
   color: white;
-  background: #168ac0;
-  box-shadow: 0 10px 25px rgba(22, 138, 192, .3);
+  background: #dc2626;
+  box-shadow: 0 10px 25px rgba(220, 38, 38, .3);
 }
 
 /* Custom scrollbar */

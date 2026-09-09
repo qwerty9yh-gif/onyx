@@ -20,7 +20,7 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
       className={({ isActive }) =>
         `flex items-center gap-3 px-4 py-2.5 rounded-md mx-2 my-1 text-sm font-medium transition-colors ${
           isActive
-            ? 'bg-red-600 text-white'
+            ? 'bg-red-600 text-white shadow-lg shadow-red-900/20'
             : 'text-gray-300 hover:bg-gray-800 hover:text-white'
         }`
       }

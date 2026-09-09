@@ -34,7 +34,7 @@ export const DashboardPage: React.FC = () => {
 
   if (isLoading || !stats) {
     return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {[...Array(8)].map((_, i) => (
           <div key={i} className="bg-white rounded-lg shadow p-4 h-24 animate-pulse">
             <div className="h-4 bg-gray-200 rounded w-3/4"></div>
