@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { Home, ReceiptText, ShoppingCart, Truck, Settings } from 'lucide-react';
+import { Home, Receipt, ShoppingCart, Truck, Settings } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Navigation } from './Navigation';
@@ -34,7 +34,7 @@ export const Layout: React.FC = () => {
       {isCashier && (
         <nav className="cashier-dock md:hidden" aria-label="Cashier navigation">
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
-          <NavLink to="/sales"><ReceiptText size={20} /><span>Transactions</span></NavLink>
+          <NavLink to="/sales"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
           <NavLink to="/purchases"><Truck size={20} /><span>Incoming</span></NavLink>
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
