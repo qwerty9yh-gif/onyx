@@ -79,7 +79,7 @@ export const ProductForm: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
-      navigate('/products');
+      queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
     },
   });
 
@@ -88,20 +88,21 @@ export const ProductForm: React.FC = () => {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">{isEdit ? 'Edit Product' : 'New Product'}</h1>
-        <p className="text-sm text-gray-600 mt-1">{isEdit ? 'Update product details' : 'Add a new product to your catalog'}</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-sky-700">Product management</p>
+        <h1 className="text-3xl font-bold text-slate-900">{isEdit ? 'Edit product' : 'Add product'}</h1>
+        <p className="mt-1 text-sm text-slate-500">Changes are saved to the local inventory immediately.</p>
       </div>
 
-      <form onSubmit={handleSubmit(onSubmit)} className="bg-white rounded-lg shadow p-6 space-y-4">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 rounded-3xl border border-white/80 bg-white/85 p-6 shadow-xl shadow-slate-200/50 backdrop-blur-xl">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input label="Name" placeholder="Product name" error={errors.name?.message} {...register('name')} />
           <Input label="SKU" placeholder="Stock Keeping Unit" error={errors.sku?.message} {...register('sku')} />
           <Input label="Barcode" placeholder="Barcode (optional)" error={errors.barcode?.message} {...register('barcode')} />
           <Input label="Image URL" placeholder="https://..." error={errors.image?.message} {...register('image')} />
-          <Input label="Cost Price" type="number" step="0.01" placeholder="0.00" error={errors.costPrice?.message} {...register('costPrice', { valueAsNumber: true })} />
-          <Input label="Selling Price" type="number" step="0.01" placeholder="0.00" error={errors.sellingPrice?.message} {...register('sellingPrice', { valueAsNumber: true })} />
+          <Input label="Cost Price (GH₵)" type="number" step="0.01" placeholder="0.00" error={errors.costPrice?.message} {...register('costPrice', { valueAsNumber: true })} />
+          <Input label="Selling Price (GH₵)" type="number" step="0.01" placeholder="0.00" error={errors.sellingPrice?.message} {...register('sellingPrice', { valueAsNumber: true })} />
           <Input label="Stock Quantity" type="number" placeholder="0" error={errors.stockQuantity?.message} {...register('stockQuantity', { valueAsNumber: true })} />
           <Input label="Minimum Stock" type="number" placeholder="0" error={errors.minimumStock?.message} {...register('minimumStock', { valueAsNumber: true })} />
           <Input label="Tax Rate" type="number" step="0.01" placeholder="0.00" error={errors.taxRate?.message} {...register('taxRate', { valueAsNumber: true })} />
@@ -138,10 +139,13 @@ export const ProductForm: React.FC = () => {
             {(mutation.error as Error)?.message || 'An error occurred'}
           </div>
         )}
+        {mutation.isSuccess && (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-3 text-sm font-semibold text-emerald-700">Product saved successfully.</div>
+        )}
 
         <div className="flex gap-2 pt-4 border-t">
-          <Button type="submit" variant="primary" loading={mutation.isPending}>{isEdit ? 'Update' : 'Create'} Product</Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/products')}>Cancel</Button>
+          <Button type="submit" className="rounded-2xl bg-sky-600 hover:bg-sky-700" loading={mutation.isPending}>{isEdit ? 'Save changes' : 'Save product'}</Button>
+          <Button type="button" variant="outline" className="rounded-2xl" onClick={() => navigate('/products')}>Cancel</Button>
         </div>
       </form>
     </div>
