@@ -4,7 +4,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import { config } from './config/index.js';
 import { errorHandler } from './middleware/errorHandler.js';
-import { authenticate } from './middleware/auth.js';
+import { authenticate, requireRole } from './middleware/auth.js';
 import { authRouter } from './routes/auth.js';
 import { userRouter } from './routes/users.js';
 import { productRouter } from './routes/products.js';
@@ -71,18 +71,18 @@ app.get('/', (_req, res) => {
 app.use('/api/auth', authRouter);
 app.use('/api/health', healthRouter);
 // Protected routes
-app.use('/api/users', authenticate, userRouter);
-app.use('/api/products', authenticate, productRouter);
-app.use('/api/categories', authenticate, categoryRouter);
+app.use('/api/users', authenticate, requireRole('ADMIN'), userRouter);
+app.use('/api/products', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), productRouter);
+app.use('/api/categories', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), categoryRouter);
 app.use('/api/sales', authenticate, saleRouter);
-app.use('/api/inventory', authenticate, inventoryRouter);
-app.use('/api/customers', authenticate, customerRouter);
-app.use('/api/suppliers', authenticate, supplierRouter);
-app.use('/api/purchases', authenticate, purchaseRouter);
-app.use('/api/reports', authenticate, reportRouter);
-app.use('/api/analytics', authenticate, analyticsRouter);
-app.use('/api/sync', authenticate, syncRouter);
-app.use('/api/settings', authenticate, settingsRouter);
+app.use('/api/inventory', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), inventoryRouter);
+app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER'), customerRouter);
+app.use('/api/suppliers', authenticate, requireRole('ADMIN', 'MANAGER'), supplierRouter);
+app.use('/api/purchases', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), purchaseRouter);
+app.use('/api/reports', authenticate, requireRole('ADMIN'), reportRouter);
+app.use('/api/analytics', authenticate, requireRole('ADMIN'), analyticsRouter);
+app.use('/api/sync', authenticate, requireRole('ADMIN'), syncRouter);
+app.use('/api/settings', authenticate, requireRole('ADMIN'), settingsRouter);
 
 // Error handling
 app.use(errorHandler);

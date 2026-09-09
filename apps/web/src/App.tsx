@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
+import type { UserRole } from './lib/types';
 import { Layout } from './components/layout/Layout';
 import { LoginPage } from './pages/auth/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
@@ -48,6 +49,16 @@ const RequireAuth = () => {
   return <Outlet />;
 };
 
+const RequireRole: React.FC<{ roles: UserRole[] }> = ({ roles }) => {
+  const { data: user } = useQuery({
+    queryKey: ['me'],
+    queryFn: () => api.get('/auth/me').then((res) => res.data.data),
+    retry: false,
+  });
+  if (!user || !roles.includes(user.role)) return <Navigate to="/sales" replace />;
+  return <Outlet />;
+};
+
 function App() {
   return (
     <Routes>
@@ -56,28 +67,34 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
-          <Route path="/products" element={<ProductsPage />} />
-          <Route path="/products/new" element={<ProductForm />} />
-          <Route path="/products/:id" element={<ProductDetail />} />
-          <Route path="/products/:id/edit" element={<ProductForm />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/sales/:id/receipt" element={<ReceiptPage />} />
-          <Route path="/customers" element={<CustomersPage />} />
-          <Route path="/customers/new" element={<CustomerForm />} />
-          <Route path="/customers/:id/edit" element={<CustomerForm />} />
-          <Route path="/suppliers" element={<SuppliersPage />} />
-          <Route path="/suppliers/new" element={<SupplierForm />} />
-          <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
-          <Route path="/purchases" element={<PurchasesPage />} />
-          <Route path="/purchases/new" element={<PurchaseForm />} />
-          <Route path="/purchases/:id/edit" element={<PurchaseForm />} />
-          <Route path="/categories" element={<CategoriesPage />} />
-          <Route path="/inventory" element={<InventoryPage />} />
-          <Route path="/reports" element={<ReportsPage />} />
-          <Route path="/analytics" element={<AnalyticsPage />} />
-          <Route path="/users" element={<UsersPage />} />
-          <Route path="/settings" element={<SettingsPage />} />
-          <Route path="/sync" element={<SyncPage />} />
+          <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'INVENTORY_STAFF']} />}>
+            <Route path="/products" element={<ProductsPage />} />
+            <Route path="/products/new" element={<ProductForm />} />
+            <Route path="/products/:id" element={<ProductDetail />} />
+            <Route path="/products/:id/edit" element={<ProductForm />} />
+            <Route path="/purchases" element={<PurchasesPage />} />
+            <Route path="/purchases/new" element={<PurchaseForm />} />
+            <Route path="/purchases/:id/edit" element={<PurchaseForm />} />
+            <Route path="/inventory" element={<InventoryPage />} />
+          </Route>
+          <Route element={<RequireRole roles={['ADMIN', 'MANAGER']} />}>
+            <Route path="/customers" element={<CustomersPage />} />
+            <Route path="/customers/new" element={<CustomerForm />} />
+            <Route path="/customers/:id/edit" element={<CustomerForm />} />
+            <Route path="/suppliers" element={<SuppliersPage />} />
+            <Route path="/suppliers/new" element={<SupplierForm />} />
+            <Route path="/suppliers/:id/edit" element={<SupplierForm />} />
+            <Route path="/categories" element={<CategoriesPage />} />
+            <Route path="/reports" element={<ReportsPage />} />
+            <Route path="/analytics" element={<AnalyticsPage />} />
+            <Route path="/sync" element={<SyncPage />} />
+          </Route>
+          <Route element={<RequireRole roles={['ADMIN']} />}>
+            <Route path="/users" element={<UsersPage />} />
+            <Route path="/settings" element={<SettingsPage />} />
+          </Route>
         </Route>
       </Route>
     </Routes>

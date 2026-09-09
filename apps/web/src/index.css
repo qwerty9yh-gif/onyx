@@ -2,6 +2,71 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  font-family: 'Trebuchet MS', 'Segoe UI', sans-serif;
+  color: #172033;
+  background: #eef5fb;
+  font-synthesis: none;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  margin: 0;
+  background: radial-gradient(circle at top right, #dff4ff 0, transparent 38%), #eef5fb;
+}
+
+button, input, select {
+  touch-action: manipulation;
+}
+
+.cashier-surface {
+  background: linear-gradient(135deg, rgba(239, 248, 255, .96), rgba(226, 239, 250, .9));
+}
+
+.cashier-dock {
+  position: fixed;
+  right: 12px;
+  bottom: 12px;
+  left: 12px;
+  z-index: 40;
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  align-items: end;
+  min-height: 70px;
+  padding: 10px 6px 7px;
+  border: 1px solid rgba(255, 255, 255, .75);
+  border-radius: 26px;
+  background: rgba(255, 255, 255, .78);
+  box-shadow: 0 18px 50px rgba(27, 60, 92, .18);
+  backdrop-filter: blur(20px);
+}
+
+.cashier-dock a {
+  display: flex;
+  min-height: 48px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  color: #66809a;
+  font-size: 10px;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.cashier-dock a.active { color: #1976a8; }
+.cashier-dock .cashier-dock-sale {
+  width: 64px;
+  height: 64px;
+  margin: -30px auto 0;
+  border: 4px solid #eef5fb;
+  border-radius: 50%;
+  color: white;
+  background: #168ac0;
+  box-shadow: 0 10px 25px rgba(22, 138, 192, .3);
+}
+
 /* Custom scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
