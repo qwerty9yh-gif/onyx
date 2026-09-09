@@ -7,7 +7,7 @@
     "dev": "tsx watch src/index.ts",
     "build": "tsc",
     "start": "node dist/index.js",
-    "migrate": "prisma migrate dev --schema ../../prisma/schema.prisma",
+    "migrate": "prisma db push --schema ../../prisma/schema.prisma --accept-data-loss",
     "generate": "prisma generate --schema ../../prisma/schema.prisma",
     "seed": "tsx prisma/seed.ts",
     "lint": "eslint src --ext ts"
