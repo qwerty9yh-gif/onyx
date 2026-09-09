@@ -1,0 +1,30 @@
+services:
+  - type: web
+    name: onyx-api
+    runtime: node
+    buildCommand: npm ci && npm run db:generate && npm run build:api
+    startCommand: npm run start --workspace=apps/api
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: DATABASE_URL
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_EXPIRES_IN
+        value: 7d
+      - key: FRONTEND_URL
+        value: https://qwerty9yh-gif.github.io/onyx/
+      - key: CORS_ORIGINS
+        value: https://qwerty9yh-gif.github.io,http://localhost:5173
+      - key: REDIS_URL
+        sync: false
+      - key: PRINTER_API_URL
+        sync: false
+      - key: SYNC_INTERVAL
+        value: 30
