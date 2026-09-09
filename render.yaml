@@ -2,7 +2,7 @@ services:
   - type: web
     name: onyx-api
     runtime: node
-    buildCommand: npm ci && npm run db:generate && npm run build:api
+    buildCommand: npm ci --include=dev && npm run db:generate && npm run build:api
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /api/health
     envVars:
