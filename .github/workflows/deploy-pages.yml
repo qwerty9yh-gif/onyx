@@ -38,6 +38,9 @@ jobs:
         env:
           VITE_API_URL: ${{ vars.VITE_API_URL || 'https://onyx-rkna.onrender.com/api' }}
 
+      - name: Add GitHub Pages SPA fallback
+        run: cp apps/web/dist/index.html apps/web/dist/404.html
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 
