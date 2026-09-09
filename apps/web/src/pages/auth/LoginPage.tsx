@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Lock, ShieldCheck, UserRound } from 'lucide-react';
-import { useLocation } from 'react-router-dom';
-import { api } from '../../lib/api';
-import { loginByCard } from '../../lib/auth';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { api, handleApiError } from '../../lib/api';
+import { getToken, loginByCard } from '../../lib/auth';
 
 interface LoginUser {
   id: string;
@@ -61,6 +61,8 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const from = (location.state as { from?: { pathname: string } } | undefined)?.from?.pathname;
 
   const { data: users = [], isLoading, isError } = useQuery<LoginUser[]>({
@@ -75,11 +77,30 @@ export const LoginPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      loginByCard(selected.id, password);
+      console.log('[ONYX LOGIN] Attempting login for:', selected.id);
+      console.log('[ONYX LOGIN] Password length:', password.length, 'characters');
+      const user = await loginByCard(selected.id, password);
+      console.log('[ONYX LOGIN] Login response status: 200 OK');
+      console.log('[ONYX LOGIN] Token stored successfully:', !!getToken());
+      console.log('[ONYX LOGIN] User authenticated:', user?.email);
       const dest = from || homeFor(selected.role);
-      window.location.href = `${base}${dest.replace(/^\//, '')}`;
-    } catch {
-      setError('Incorrect password. Please try again.');
+      console.log('[ONYX LOGIN] Redirecting to:', dest);
+      queryClient.setQueryData(['me'], user);
+      setSelected(null);
+      setPassword('');
+      setError('');
+      navigate(dest, { replace: true });
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { status?: number } };
+      const status = axiosErr?.response?.status;
+      console.log('[ONYX LOGIN] Login response status:', status);
+      if (status === 401) {
+        console.log('[ONYX LOGIN] 401 Unauthorized - wrong password');
+        setError('Invalid password. Please try again.');
+      } else {
+        console.log('[ONYX LOGIN] Login failed — status:', status || 'unknown');
+        setError(handleApiError(err));
+      }
       setBusy(false);
     }
   };

@@ -2,6 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
+import { getToken } from './lib/auth';
 import type { UserRole } from './lib/types';
 import { Layout } from './components/layout/Layout';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -29,11 +30,18 @@ import { IncomingPage } from './pages/incoming/IncomingPage';
 
 const RequireAuth = () => {
   const location = useLocation();
+  const hasToken = !!getToken();
+  console.log('[ONYX AUTH] RequireAuth - token present:', hasToken);
+
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
-    queryFn: () => api.get('/auth/me').then((res) => res.data.data),
+    queryFn: () => {
+      console.log('[ONYX AUTH] Fetching /auth/me with token:', !!getToken());
+      return api.get('/auth/me').then((res) => res.data.data);
+    },
     retry: false,
     staleTime: 1000 * 60 * 10,
+    enabled: hasToken,
   });
 
   if (isLoading) {
@@ -45,6 +53,7 @@ const RequireAuth = () => {
   }
 
   if (!user) {
+    console.log('[ONYX AUTH] No user - redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

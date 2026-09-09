@@ -5,10 +5,30 @@ export const api = axios.create({
   withCredentials: true,
 });
 
+// Paths that should NOT trigger automatic logout on 401
+const SKIP_LOGOUT_PATHS = ['/auth/login', '/auth/card-login', '/auth/users'];
+
+// Ensure Authorization header is always attached if a token exists
+api.interceptors.request.use((config) => {
+  const storedToken = localStorage.getItem('onyx_token');
+  const hasAuth = !!config.headers?.Authorization;
+  if (storedToken && !hasAuth) {
+    config.headers.Authorization = `Bearer ${storedToken}`;
+    console.log('[ONYX API] Attached stored token to request:', config.url);
+  } else if (!storedToken && !hasAuth) {
+    console.log('[ONYX API] Request without auth token:', config.url);
+  }
+  return config;
+});
+
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (error.response?.status === 401) {
+    const status = error.response?.status;
+    const path = error.config?.url || '';
+    console.log('[ONYX API] Response status:', status, 'for path:', path);
+    if (status === 401 && !SKIP_LOGOUT_PATHS.some((p) => path.includes(p))) {
+      console.log('[ONYX API] Unauthorized - triggering logout');
       window.dispatchEvent(new Event('auth:logout'));
     }
     return Promise.reject(error);
