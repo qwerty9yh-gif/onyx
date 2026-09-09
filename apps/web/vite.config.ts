@@ -6,6 +6,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 export default defineConfig({
+  base: '/onyx/',
   plugins: [
     react(),
     VitePWA({
