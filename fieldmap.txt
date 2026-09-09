@@ -1,0 +1,177 @@
+
+==== analytics.ts ====
+18: prisma.sale.count :: prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } } }),
+19: prisma.sale.count :: prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } } }),
+20: prisma.sale.count :: prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } } }),
+21: prisma.sale.aggregate :: prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } }, _sum: { total: true } }),
+22: prisma.sale.aggregate :: prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } }, _sum: { total: true } }),
+23: prisma.sale.aggregate :: prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } }, _sum: { total: true } }),
+24: prisma.sale.count :: prisma.sale.count({ where: { status: 'COMPLETED' } }),
+25: prisma.sale.aggregate :: prisma.sale.aggregate({ where: { status: 'COMPLETED' }, _avg: { total: true } }),
+26: prisma.product.count :: prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } } }),
+27: prisma.saleItem.groupBy :: prisma.saleItem.groupBy({ by: ['productId'], _sum: { quantity: true, total: true }, orderBy: { _sum: { total: 'desc' } }, take: 10, where: { sale: { status: 'COMPLETED' } } }),
+28: prisma.saleItem.groupBy :: prisma.saleItem.groupBy({ by: ['productId'], _count: true, orderBy: { _count: { productId: 'desc' } }, take: 10 })
+31: prisma.product.findUnique :: const p = await prisma.product.findUnique({ where: { id: item.productId }, select: { id: true, name: true, image: true, sku: true } });
+57: prisma.sale.count :: prisma.sale.count({ where }),
+58: prisma.sale.aggregate :: prisma.sale.aggregate({ where, _sum: { total: true } }),
+59: prisma.sale.count :: prisma.sale.count({ where }),
+60: prisma.sale.aggregate :: prisma.sale.aggregate({ where, _avg: { total: true } }),
+61: prisma.payment.groupBy :: prisma.payment.groupBy({ by: ['method'], _sum: { amount: true }, where: { sale: { status: 'COMPLETED', createdAt: { gte: start, lte: end } } }, orderBy: { _sum: { amount: 'desc' } } })
+71: prisma.product.count :: prisma.product.count(),
+72: prisma.product.count :: prisma.product.count({ where: { status: 'ACTIVE' } }),
+73: prisma.product.count :: prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } } }),
+74: prisma.product.count :: prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: 0 } }),
+75: prisma.product.aggregate :: prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { stockQuantity: true } }),
+76: prisma.product.aggregate :: prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { costPrice: true } })
+==== auth.ts ====
+16: prisma.user.findUnique :: const user = await prisma.user.findUnique({ where: { email } });
+20: prisma.user.update :: await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+23: prisma.session.create :: const session = await prisma.session.create({ data: { userId: user.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+25: prisma.device.upsert :: const device = await prisma.device.upsert({ where: { deviceId }, update: { name: req.headers['x-device-name'] as string || 'POS', lastSeen: new Date(), onlineStatus: true }, create: { deviceId, name: req.headers['x-devic
+27: prisma.session.create :: await prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });
+28: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: user.id, action: 'LOGIN', entity: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+35: prisma.user.findUnique :: const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, avatar: true, lastLogin: true
+44: prisma.session.delete :: if (tok) await prisma.session.deleteMany({ where: { token: tok, userId: req.user!.id } });
+45: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'LOGOUT', entity: 'user', entityId: req.user!.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+54: prisma.session.delete :: await prisma.session.deleteMany({ where: { token: old, userId: req.user!.id } });
+57: prisma.session.create :: const session = await prisma.session.create({ data: { userId: req.user!.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+67: prisma.user.findUnique :: const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+72: prisma.user.update :: await prisma.user.update({ where: { id: req.user!.id }, data: { passwordHash: hash } });
+73: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CHANGE_PASSWORD', entity: 'user', entityId: req.user!.id, ipAddress: req.ip } });
+==== categories.ts ====
+14: prisma.category.findMany :: const cats = await prisma.category.findMany({ where: { deletedAt: null }, include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } });
+21: prisma.category.findUnique :: const c = await prisma.category.findUnique({ where: { id: req.params.id }, include: { parent: { select: { id: true, name: true } }, children: { select: { id: true, name: true } } } });
+31: prisma.category.findUnique :: if (d.parentId) { const p = await prisma.category.findUnique({ where: { id: d.parentId } }); if (!p) throw new AppError('Parent not found', 404); }
+32: prisma.category.create :: const c = await prisma.category.create({ data: { name: d.name, description: d.description, image: d.image, parentId: d.parentId || null } });
+33: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+42: prisma.category.findUnique :: const e = await prisma.category.findUnique({ where: { id: req.params.id } });
+44: prisma.category.update :: const c = await prisma.category.update({ where: { id: req.params.id }, data: d });
+45: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+53: prisma.category.update :: const c = await prisma.category.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+54: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+==== customers.ts ====
+25: prisma.customer.findMany :: prisma.customer.findMany({
+32: prisma.customer.count :: prisma.customer.count({ where }),
+41: prisma.customer.findUnique :: const c = await prisma.customer.findUnique({
+61: prisma.customer.findFirst :: if (email && await prisma.customer.findFirst({ where: { email } })) throw new AppError('Email exists', 409);
+62: prisma.customer.findFirst :: if (barcode && await prisma.customer.findFirst({ where: { barcode } })) throw new AppError('Barcode exists', 409);
+64: prisma.customer.create :: const c = await prisma.customer.create({
+67: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CUSTOMER', entity: 'customer', entityId: c.id, details: { name: c.name } } });
+75: prisma.customer.findUnique :: const c = await prisma.customer.findUnique({ where: { id: req.params.id } });
+78: prisma.customer.findFirst :: if (email && email !== c.email && await prisma.customer.findFirst({ where: { email, id: { not: req.params.id } } })) throw new AppError('Email exists', 409);
+79: prisma.customer.findFirst :: if (barcode && barcode !== c.barcode && await prisma.customer.findFirst({ where: { barcode, id: { not: req.params.id } } })) throw new AppError('Barcode exists', 409);
+80: prisma.customer.update :: const u = await prisma.customer.update({
+92: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CUSTOMER', entity: 'customer', entityId: u.id, details: { customerId: u.id } } });
+100: prisma.customer.findUnique :: const c = await prisma.customer.findUnique({ where: { id: req.params.id } });
+102: prisma.customer.delete :: await prisma.customer.delete({ where: { id: req.params.id } });
+103: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CUSTOMER', entity: 'customer', entityId: req.params.id, details: { name: c.name } } });
+111: prisma.customer.findFirst :: const c = await prisma.customer.findFirst({ where: { barcode: req.params.barcode } });
+==== health.ts ====
+
+==== inventory.ts ====
+14: prisma.product.findUnique :: const product = await prisma.product.findUnique({ where: { id: productId } });
+18: prisma.product.update :: prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),
+19: prisma.inventoryMovement.create :: prisma.inventoryMovement.create({
+27: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'ADJUST_STOCK', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+38: prisma.product.findUnique :: const product = await prisma.product.findUnique({ where: { id: productId } });
+43: prisma.product.update :: prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock, costPrice: unitPriceFinal } }),
+44: prisma.inventoryMovement.create :: prisma.inventoryMovement.create({
+52: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_IN', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, unitPrice: unitPriceFinal, supplierId, purchaseOrder } 
+63: prisma.product.findUnique :: const product = await prisma.product.findUnique({ where: { id: productId } });
+68: prisma.product.update :: prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),
+69: prisma.inventoryMovement.create :: prisma.inventoryMovement.create({
+73: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_OUT', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+89: prisma.inventoryMovement.findMany :: prisma.inventoryMovement.findMany({
+97: prisma.inventoryMovement.count :: prisma.inventoryMovement.count({ where })
+106: prisma.product.findMany :: const products = await prisma.product.findMany({
+117: prisma.product.findMany :: const products = await prisma.product.findMany({
+==== reports.ts ====
+14: prisma.sale.findMany :: const sales = await prisma.sale.findMany({
+27: prisma.sale.aggregate :: const summary = await prisma.sale.aggregate({
+35: prisma.payment.groupBy :: const byPayment = await prisma.payment.groupBy({
+69: prisma.product.findMany :: const products = await prisma.product.findMany({
+76: prisma.product.aggregate :: const summary = await prisma.product.aggregate({
+112: prisma.product.findMany :: const products = await prisma.product.findMany({
+120: prisma.product.aggregate :: const summary = await prisma.product.aggregate({
+125: prisma.category.findMany :: const categories = await prisma.category.findMany({
+159: prisma.sale.groupBy :: const cashiers = await prisma.sale.groupBy({
+169: prisma.user.findUnique :: const user = await prisma.user.findUnique({
+211: prisma.customer.findMany :: const customers = await prisma.customer.findMany({
+222: prisma.customer.aggregate :: const summary = await prisma.customer.aggregate({
+==== sales.ts ====
+18: prisma.sale.findFirst :: const existing = await prisma.sale.findFirst({ where: { idempotencyKey } });
+20: prisma.product.findUnique :: const products = await Promise.all(items.map((i: { productId: string }) => prisma.product.findUnique({ where: { id: i.productId } })));
+26: prisma.business.findFirst :: const business = await prisma.business.findFirst({ select: { taxRate: true } });
+43: prisma.sale.create :: const sale = await prisma.sale.create({
+51: prisma.saleItem.create :: await prisma.saleItem.createMany({
+57: prisma.payment.create :: await prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: amountReceived } });
+58: prisma.product.update :: await Promise.all(itemsSnap.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+59: prisma.inventoryMovement.create :: await Promise.all(itemsSnap.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } }))
+60: prisma.customer.update :: if (customerId) await prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
+61: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SALE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod } } });
+62: prisma.syncOperation.create :: await prisma.syncOperation.create({
+83: prisma.sale.findMany :: prisma.sale.findMany({
+90: prisma.sale.count :: prisma.sale.count({ where })
+99: prisma.sale.findUnique :: const s = await prisma.sale.findUnique({
+117: prisma.sale.findUnique :: const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+119: prisma.sale.update :: await prisma.sale.update({ where: { id: req.params.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
+120: prisma.product.update :: await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+121: prisma.inventoryMovement.create :: await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: i.quantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } }
+122: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+133: prisma.sale.findUnique :: const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+138: prisma.refund.create :: const refund = await prisma.refund.create({
+146: prisma.sale.update :: await prisma.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: refund.id } });
+147: prisma.refundItem.create :: await prisma.refundItem.createMany({
+153: prisma.payment.create :: await prisma.payment.create({ data: { saleId: s.id, method: s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+154: prisma.product.update :: await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+155: prisma.inventoryMovement.create :: await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'REFUND', quantity: i.quantity, referenceId: s.id, notes: 'Refund' } })));
+156: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
+==== settings.ts ====
+13: prisma.business.findFirst :: prisma.business.findFirst({ select: { id: true, name: true, phone: true, email: true, address: true, taxRate: true, currency: true, receiptPrefix: true, logo: true } }),
+14: prisma.settings.findFirst :: prisma.settings.findFirst()
+26: prisma.business.findFirst :: const existing = await prisma.business.findFirst();
+29: prisma.business.upsert :: prisma.business.upsert({
+53: prisma.settings.upsert :: prisma.settings.upsert({
+78: prisma.syncOperation.count :: prisma.syncOperation.count({ where: { status: 'PENDING' } }),
+79: prisma.syncOperation.count :: prisma.syncOperation.count({ where: { status: 'FAILED' } }),
+80: prisma.syncOperation.findFirst :: prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } })
+90: prisma.syncOperation.findMany :: const pending = await prisma.syncOperation.findMany({ where: { status: 'PENDING' }, take: 100, orderBy: { createdAt: 'asc' } });
+94: prisma.syncOperation.update :: await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'COMPLETED', completedAt: new Date() } });
+97: prisma.syncOperation.update :: await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'FAILED' } });
+==== suppliers.ts ====
+25: prisma.supplier.findMany :: prisma.supplier.findMany({
+32: prisma.supplier.count :: prisma.supplier.count({ where }),
+41: prisma.supplier.findUnique :: const s = await prisma.supplier.findUnique({
+57: prisma.supplier.create :: const s = await prisma.supplier.create({ data: { name, email, phone, contactInfo, address, notes, isActive, localId } });
+58: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SUPPLIER', entity: 'supplier', entityId: s.id, details: { name: s.name } } });
+68: prisma.supplier.findUnique :: const s = await prisma.supplier.findUnique({ where: { id: req.params.id } });
+70: prisma.supplier.update :: const u = await prisma.supplier.update({
+82: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_SUPPLIER', entity: 'supplier', entityId: u.id, details: { supplierId: u.id } } });
+91: prisma.supplier.findUnique :: const s = await prisma.supplier.findUnique({ where: { id: req.params.id } });
+93: prisma.supplier.update :: await prisma.supplier.update({ where: { id: req.params.id }, data: { isActive: false } });
+94: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_SUPPLIER', entity: 'supplier', entityId: req.params.id, details: { name: s.name } } });
+==== sync.ts ====
+17: prisma.syncOperation.findMany :: prisma.syncOperation.findMany({ where, orderBy: { createdAt: 'desc' }, skip: o, take: l, include: { user: { select: { id: true, firstName: true, lastName: true } } } }),
+18: prisma.syncOperation.count :: prisma.syncOperation.count({ where })
+28: prisma.syncOperation.findUnique :: const op = await prisma.syncOperation.findUnique({ where: { id: req.params.id } });
+30: prisma.syncOperation.update :: await prisma.syncOperation.update({ where: { id: req.params.id }, data: { status: 'PENDING', retryCount: { increment: 1 }, updatedAt: new Date() } });
+39: prisma.syncOperation.delete :: await prisma.syncOperation.delete({ where: { id: req.params.id } });
+48: prisma.syncOperation.count :: prisma.syncOperation.count({ where: { status: 'PENDING' } }),
+49: prisma.syncOperation.count :: prisma.syncOperation.count({ where: { status: 'FAILED' } }),
+50: prisma.syncOperation.count :: prisma.syncOperation.count({ where: { status: 'PROCESSING' } })
+59: prisma.syncOperation.findFirst :: const lastSync = await prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } });
+==== users.ts ====
+39: prisma.user.findMany :: prisma.user.findMany({
+46: prisma.user.count :: prisma.user.count({ where }),
+55: prisma.user.findUnique :: const u = await prisma.user.findUnique({
+68: prisma.user.findFirst :: const existing = await prisma.user.findFirst({ where: { OR: [{ email: d.email }, { username: d.username }] } });
+71: prisma.user.create :: const u = await prisma.user.create({ data: { email: d.email, username: d.username, passwordHash: hash, firstName: d.firstName, lastName: d.lastName, role: d.role, status: d.status, phone: d.phone } });
+72: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_USER', entity: 'user', entityId: u.id, details: { email: u.email, role: u.role } } });
+81: prisma.user.findUnique :: const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+83: prisma.user.findUnique :: if (d.email && d.email !== existing.email && await prisma.user.findUnique({ where: { email: d.email } })) throw new AppError('Email exists', 409);
+84: prisma.user.findUnique :: if (d.username && d.username !== existing.username && await prisma.user.findUnique({ where: { username: d.username } })) throw new AppError('Username exists', 409);
+85: prisma.user.update :: const u = await prisma.user.update({
+97: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_USER', entity: 'user', entityId: u.id, details: { changes: d } } });
+106: prisma.user.findUnique :: const u = await prisma.user.findUnique({ where: { id: req.params.id } });
+108: prisma.user.update :: await prisma.user.update({ where: { id: req.params.id }, data: { status: 'DISABLED' } });
+109: prisma.auditLog.create :: await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DISABLE_USER', entity: 'user', entityId: req.params.id, details: { email: u.email } } });

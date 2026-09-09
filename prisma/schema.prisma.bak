@@ -1,0 +1,197 @@
+// This is your Prisma schema file
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ENUMS
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+  INVENTORY_STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  INVITED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  VOIDED
+  REFUNDED
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+  CONFLICT
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  QR
+  OTHER
+}
+
+enum InventoryMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  SALE
+  REFUND
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+  OUT_OF_STOCK
+}
+
+// This is your Prisma schema file
+// Database: PostgreSQL
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum Role {
+  ADMIN
+  MANAGER
+  CASHIER
+  INVENTORY_STAFF
+}
+
+enum UserStatus {
+  ACTIVE
+  DISABLED
+  INVITED
+}
+
+enum TransactionStatus {
+  PENDING
+  COMPLETED
+  VOIDED
+  REFUNDED
+}
+
+enum SyncStatus {
+  PENDING
+  SYNCED
+  FAILED
+  CONFLICT
+}
+
+enum PaymentMethod {
+  CASH
+  CARD
+  TRANSFER
+  QR
+  OTHER
+}
+
+enum InventoryMovementType {
+  STOCK_IN
+  STOCK_OUT
+  ADJUSTMENT
+  SALE
+  REFUND
+  TRANSFER_IN
+  TRANSFER_OUT
+}
+
+enum ProductStatus {
+  ACTIVE
+  INACTIVE
+  DISCONTINUED
+  OUT_OF_STOCK
+}
+
+// ============================================
+// CORE TABLES
+// ============================================
+
+model User {
+  id            String   @id @default(uuid())
+  email         String   @unique
+  username      String   @unique
+  passwordHash  String
+  firstName     String
+  lastName      String
+  role          Role     @default(CASHIER)
+  status        UserStatus @default(INVITED)
+  phone         String?
+  avatar        String?
+  lastLogin     DateTime?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  deletedAt     DateTime?
+  
+  sessions      Session[]
+  devices       Device[]
+  cashierSales  Sale[]         @relation("CashierSales")
+  inventoryOps  InventoryMovement[]
+  auditLogs     AuditLog[]
+  syncOps       SyncOperation[]
+}
+
+model RolePermission {
+  id          String   @id @default(uuid())
+  role        Role
+  resource   String   // e.g., "products", "sales", "users"
+  actions     String[] // e.g., ["create", "read", "update", "delete"]
+  createdAt   DateTime @default(now())
+  
+  @@unique([role, resource])
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token       String   @unique
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+  ipAddress   String?
+  userAgent   String?
+  deviceId    String?
+}
+
+model Device {
+  id              String   @id @default(uuid())
+  deviceId        String   @unique  // hardware device identifier
+  name            String
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  lastSeen        DateTime @default(now())
+  onlineStatus    Boolean  @default(false)
+  location        String?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+}

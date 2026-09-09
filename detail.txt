@@ -1,0 +1,248 @@
+prisma.sale.findFirst({ where: { idempotencyKey } });
+---
+prisma.product.findUnique({ where: { id: i.productId } })));
+---
+prisma.business.findFirst({ select: { taxRate: true } });
+---
+prisma.sale.create({       data: {         receiptNumber, cashierId: req.user!.id, customerId, status: 'COMPLETED',         syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',         tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes,         deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: now, createdAt: now       }     });
+---
+prisma.saleItem.createMany({       data: itemsSnap.map(i => ({         saleId: sale.id, productId: i.productId, name: i.name, sku: i.sku, quantity: i.quantity,         unitPrice: i.unitPrice, subtotal: i.subtotal, discount: i.discount, tax: i.tax, total: i.total       }))     });
+---
+prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: amountReceived } });
+---
+prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+---
+prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } })));
+---
+prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SALE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod } } });
+---
+prisma.syncOperation.create({       data: {         userId: req.user!.id, entity: 'sale', entityId: sale.id, operationType: 'create',         payload: { saleId: sale.id, items: itemsSnap, receiptNumber, subtotal: rawSubtotal, discount: totalDiscount, tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes, customerId },         status: 'PENDING', localId: localIdFinal, serverId: sale.id, idempotencyKey       }     });
+---
+prisma.sale.findMany({         where, include: {           cashier: { select: { id: true, firstName: true, lastName: true } },           items: true, payments: true         },         orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit       }),       prisma.sale.count({ where })     ]);
+---
+prisma.sale.findUnique({       where: { id: req.params.id },       include: {         cashier: { select: { id: true, firstName: true, lastName: true } },         customer: true,         items: { include: { product: { select: { id: true, name: true, image: true } } } },         payments: true, refund: true       }     });
+---
+prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+---
+prisma.sale.update({ where: { id: req.params.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
+---
+prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+---
+prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: i.quantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } })));
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+---
+prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+---
+prisma.refund.create({       data: {         originalSaleId: s.id, cashierId: req.user!.id, reason,         subtotal: s.subtotal, discount: s.discount, tax: s.tax,         total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,         amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()       }     });
+---
+prisma.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: refund.id } });
+---
+prisma.refundItem.createMany({       data: s.items.map(i => ({         refundId: refund.id, saleItemId: i.id, productId: i.productId, name: i.name,         quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total       }))     });
+---
+prisma.payment.create({ data: { saleId: s.id, method: s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+---
+prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+---
+prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'REFUND', quantity: i.quantity, referenceId: s.id, notes: 'Refund' } })));
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
+---
+prisma.sale.findMany({       where: {         status: { in: ['COMPLETED', 'REFUNDED'] },         createdAt: { gte: start, lte: end },       },       include: {         cashier: { select: { firstName: true, lastName: true } },         items: true,         payments: true,         refund: true,       },       orderBy: { createdAt: 'desc' },     });
+---
+prisma.sale.aggregate({       where: {         status: 'COMPLETED',         createdAt: { gte: start, lte: end },       },       _sum: { total: true, discount: true, tax: true, change: true },       _count: true,     });
+---
+prisma.payment.groupBy({       by: ['method'],       _sum: { amount: true },       where: {         sale: {           status: 'COMPLETED',           createdAt: { gte: start, lte: end },         },       },       orderBy: { _sum: { amount: 'desc' } },     });
+---
+prisma.product.findMany({       where: { status: 'ACTIVE' },       include: {         category: { select: { id: true, name: true } },       },       orderBy: { stockQuantity: 'asc' },     });
+---
+prisma.product.aggregate({       where: { status: 'ACTIVE' },       _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },       _count: true,     });
+---
+prisma.product.findMany({       where: { status: 'ACTIVE' },       include: {         category: { select: { id: true, name: true, image: true } },         supplier: { select: { id: true, name: true, email: true, contactInfo: true } },       },       orderBy: { name: 'asc' },     });
+---
+prisma.product.aggregate({       where: { status: 'ACTIVE' },       _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },       _count: true,     });
+---
+prisma.category.findMany({       where: { isActive: true },       include: {         _count: { select: { products: true } },         _sum: { products: { select: { stockQuantity: true } } },       },       orderBy: { name: 'asc' },     });
+---
+prisma.sale.groupBy({       by: ['cashierId'],       _sum: { total: true, discount: true },       _count: { id: true },       where: { status: 'COMPLETED' },       orderBy: { _sum: { total: 'desc' } },     });
+---
+prisma.user.findUnique({           where: { id: c.cashierId },           select: { id: true, firstName: true, lastName: true, email: true, role: true },         });
+---
+prisma.customer.findMany({       include: {         _count: { select: { purchases: true } },         purchases: {           orderBy: { createdAt: 'desc' },           take: 5,           include: { sale: { include: { items: true } } },         },       },       orderBy: { totalSpent: 'desc' },     });
+---
+prisma.customer.aggregate({       _sum: { totalSpent: true },       _count: true,     });
+---
+prisma.customer.findMany({         where,         include: { _count: { select: { purchases: true } } },         orderBy: { totalSpent: 'desc' },         skip: (page - 1) * limit,         take: limit,       }),       prisma.customer.count({ where }),     ]);
+---
+prisma.customer.findUnique({       where: { id: req.params.id },       include: {         purchases: {           include: { sale: { include: { items: true, cashier: { select: { firstName: true, lastName: true } } } } },           orderBy: { createdAt: 'desc' },           take: 20,         },       },     });
+---
+prisma.customer.findFirst({ where: { email } })) throw new AppError('Email exists', 409);
+---
+prisma.customer.findFirst({ where: { barcode } })) throw new AppError('Barcode exists', 409);
+---
+prisma.customer.create({       data: { name, email, phone, address, notes, barcode, localId },     });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CUSTOMER', entity: 'customer', entityId: c.id, details: { name: c.name } } });
+---
+prisma.customer.findUnique({ where: { id: req.params.id } });
+---
+prisma.customer.findFirst({ where: { email, id: { not: req.params.id } } })) throw new AppError('Email exists', 409);
+---
+prisma.customer.findFirst({ where: { barcode, id: { not: req.params.id } } })) throw new AppError('Barcode exists', 409);
+---
+prisma.customer.update({       where: { id: req.params.id },       data: {         ...(name && { name }),         ...(email && { email }),         ...(phone !== undefined && { phone }),         ...(address !== undefined && { address }),         ...(notes !== undefined && { notes }),         ...(barcode !== undefined && { barcode }),         ...(status && { status }),       },     });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CUSTOMER', entity: 'customer', entityId: u.id, details: { customerId: u.id } } });
+---
+prisma.customer.findUnique({ where: { id: req.params.id } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CUSTOMER', entity: 'customer', entityId: req.params.id, details: { name: c.name } } });
+---
+prisma.customer.findFirst({ where: { barcode: req.params.barcode } });
+---
+prisma.supplier.findMany({         where,         include: { _count: { select: { products: true, purchases: true } } },         orderBy: { name: 'asc' },         skip: (p - 1) * l,         take: l,       }),       prisma.supplier.count({ where }),     ]);
+---
+prisma.supplier.findUnique({       where: { id: req.params.id },       include: { products: { select: { id: true, name: true, sku: true, stockQuantity: true, sellingPrice: true } }, purchases: { orderBy: { createdAt: 'desc' }, take: 10, include: { items: true } } },     });
+---
+prisma.supplier.create({ data: { name, email, phone, contactInfo, address, notes, isActive, localId } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SUPPLIER', entity: 'supplier', entityId: s.id, details: { name: s.name } } });
+---
+prisma.supplier.findUnique({ where: { id: req.params.id } });
+---
+prisma.supplier.update({       where: { id: req.params.id },       data: {         ...(name && { name }),         ...(email !== undefined && { email }),         ...(phone !== undefined && { phone }),         ...(contactInfo !== undefined && { contactInfo }),         ...(address !== undefined && { address }),         ...(notes !== undefined && { notes }),         ...(isActive !== undefined && { isActive }),       },     });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_SUPPLIER', entity: 'supplier', entityId: u.id, details: { supplierId: u.id } } });
+---
+prisma.supplier.findUnique({ where: { id: req.params.id } });
+---
+prisma.supplier.update({ where: { id: req.params.id }, data: { isActive: false } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_SUPPLIER', entity: 'supplier', entityId: req.params.id, details: { name: s.name } } });
+---
+prisma.business.findFirst({ select: { id: true, name: true, phone: true, email: true, address: true, taxRate: true, currency: true, receiptPrefix: true, logo: true } }),       prisma.settings.findFirst()     ]);
+---
+prisma.business.upsert({         where: { id: bizId },         update: {           ...(business?.name && { name: business.name }),           ...(business?.phone && { phone: business.phone }),           ...(business?.email && { email: business.email }),           ...(business?.address && { address: business.address }),           ...(business?.taxRate !== undefined && { taxRate: business.taxRate }),           ...(business?.currency && { currency: business.currency }),           ...(business?.receiptPrefix && { receiptPrefix: business.receiptPrefix }),           ...(business?.logo !== undefined && { logo: business.logo }),         },         create: {           id: 'default',     
+---
+prisma.syncOperation.count({ where: { status: 'PENDING' } }),       prisma.syncOperation.count({ where: { status: 'FAILED' } }),       prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } })     ]);
+---
+prisma.syncOperation.findMany({ where: { status: 'PENDING' }, take: 100, orderBy: { createdAt: 'asc' } });
+---
+prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'COMPLETED', completedAt: new Date() } });
+---
+prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'FAILED' } });
+---
+prisma.syncOperation.findMany({ where, orderBy: { createdAt: 'desc' }, skip: o, take: l, include: { user: { select: { id: true, firstName: true, lastName: true } } } }),       prisma.syncOperation.count({ where })     ]);
+---
+prisma.syncOperation.findUnique({ where: { id: req.params.id } });
+---
+prisma.syncOperation.update({ where: { id: req.params.id }, data: { status: 'PENDING', retryCount: { increment: 1 }, updatedAt: new Date() } });
+---
+prisma.syncOperation.count({ where: { status: 'PENDING' } }),       prisma.syncOperation.count({ where: { status: 'FAILED' } }),       prisma.syncOperation.count({ where: { status: 'PROCESSING' } })     ]);
+---
+prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } });
+---
+prisma.user.findMany({         where,         select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, lastLogin: true, createdAt: true },         orderBy: { createdAt: 'desc' },         skip: (p - 1) * l,         take: l,       }),       prisma.user.count({ where }),     ]);
+---
+prisma.user.findUnique({       where: { id: req.params.id },       select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, lastLogin: true, createdAt: true, _count: { select: { sessions: true, devices: true } },     });
+---
+prisma.user.findFirst({ where: { OR: [{ email: d.email }, { username: d.username }] } });
+---
+prisma.user.create({ data: { email: d.email, username: d.username, passwordHash: hash, firstName: d.firstName, lastName: d.lastName, role: d.role, status: d.status, phone: d.phone } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_USER', entity: 'user', entityId: u.id, details: { email: u.email, role: u.role } } });
+---
+prisma.user.findUnique({ where: { id: req.params.id } });
+---
+prisma.user.findUnique({ where: { email: d.email } })) throw new AppError('Email exists', 409);
+---
+prisma.user.findUnique({ where: { username: d.username } })) throw new AppError('Username exists', 409);
+---
+prisma.user.update({       where: { id: req.params.id },       data: {         ...(d.email && { email: d.email }),         ...(d.username && { username: d.username }),         ...(d.firstName && { firstName: d.firstName }),         ...(d.lastName && { lastName: d.lastName }),         ...(d.role && { role: d.role }),         ...(d.status && { status: d.status }),         ...(d.phone !== undefined && { phone: d.phone }),       },     });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_USER', entity: 'user', entityId: u.id, details: { changes: d } } });
+---
+prisma.user.findUnique({ where: { id: req.params.id } });
+---
+prisma.user.update({ where: { id: req.params.id }, data: { status: 'DISABLED' } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DISABLE_USER', entity: 'user', entityId: req.params.id, details: { email: u.email } } });
+---
+prisma.product.findUnique({ where: { id: productId } });
+---
+prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),       prisma.inventoryMovement.create({         data: {           productId, userId: req.user!.id, type: 'ADJUSTMENT',           quantity, previousStock: product.stockQuantity || 0, newStock,           reason: reason || 'Manual adjustment', notes, referenceId: null         }       })     ]);
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'ADJUST_STOCK', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+---
+prisma.product.findUnique({ where: { id: productId } });
+---
+prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock, costPrice: unitPriceFinal } }),       prisma.inventoryMovement.create({         data: {           productId, userId: req.user!.id, type: 'STOCK_IN',           quantity, unitPrice: unitPriceFinal, previousStock: product.stockQuantity || 0, newStock,           reason: 'Stock in', notes, referenceId: purchaseOrder || null         }       })     ]);
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_IN', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, unitPrice: unitPriceFinal, supplierId, purchaseOrder } } });
+---
+prisma.product.findUnique({ where: { id: productId } });
+---
+prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),       prisma.inventoryMovement.create({         data: { productId, userId: req.user!.id, type: 'STOCK_OUT', quantity, previousStock: product.stockQuantity || 0, newStock, reason: reason || 'Stock out', notes, referenceId: null }       })     ]);
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_OUT', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+---
+prisma.inventoryMovement.findMany({         where,         include: {           product: { select: { id: true, name: true, sku: true } },           user: { select: { id: true, firstName: true, lastName: true } }         },         orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l       }),       prisma.inventoryMovement.count({ where })     ]);
+---
+prisma.product.findMany({       where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } },       select: { id: true, name: true, sku: true, barcode: true, stockQuantity: true, minimumStock: true, sellingPrice: true, image: true }     });
+---
+prisma.product.findMany({       where: { status: 'ACTIVE', stockQuantity: 0 },       select: { id: true, name: true, sku: true, barcode: true, stockQuantity: true, minimumStock: true, sellingPrice: true, image: true }     });
+---
+prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } } }),       prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } } }),       prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } } }),       prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } }, _sum: { total: true } }),       prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } }, _sum: { total: true } }),       prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } }, _sum: { total: true } }),       prisma.sale.count({ where: { status: 'COMPLETED' 
+---
+prisma.product.findUnique({ where: { id: item.productId }, select: { id: true, name: true, image: true, sku: true } });
+---
+prisma.sale.count({ where }),       prisma.sale.aggregate({ where, _sum: { total: true } }),       prisma.sale.count({ where }),       prisma.sale.aggregate({ where, _avg: { total: true } }),       prisma.payment.groupBy({ by: ['method'], _sum: { amount: true }, where: { sale: { status: 'COMPLETED', createdAt: { gte: start, lte: end } } }, orderBy: { _sum: { amount: 'desc' } } })     ]);
+---
+prisma.product.count(),       prisma.product.count({ where: { status: 'ACTIVE' } }),       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } } }),       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: 0 } }),       prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { stockQuantity: true } }),       prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { costPrice: true } })     ]);
+---
+prisma.user.findUnique({ where: { email } });
+---
+prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+---
+prisma.session.create({ data: { userId: user.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+---
+prisma.device.upsert({ where: { deviceId }, update: { name: req.headers['x-device-name'] as string || 'POS', lastSeen: new Date(), onlineStatus: true }, create: { deviceId, name: req.headers['x-device-name'] as string || 'POS', userId: user.id, onlineStatus: true } });
+---
+prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });
+---
+prisma.auditLog.create({ data: { userId: user.id, action: 'LOGIN', entity: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+---
+prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, avatar: true, lastLogin: true, createdAt: true } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'LOGOUT', entity: 'user', entityId: req.user!.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+---
+prisma.session.create({ data: { userId: req.user!.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+---
+prisma.user.findUnique({ where: { id: req.user!.id } });
+---
+prisma.user.update({ where: { id: req.user!.id }, data: { passwordHash: hash } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CHANGE_PASSWORD', entity: 'user', entityId: req.user!.id, ipAddress: req.ip } });
+---
+prisma.category.findMany({ where: { deletedAt: null }, include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } });
+---
+prisma.category.findUnique({ where: { id: req.params.id }, include: { parent: { select: { id: true, name: true } }, children: { select: { id: true, name: true } } } });
+---
+prisma.category.findUnique({ where: { id: d.parentId } });
+---
+prisma.category.create({ data: { name: d.name, description: d.description, image: d.image, parentId: d.parentId || null } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+---
+prisma.category.findUnique({ where: { id: req.params.id } });
+---
+prisma.category.update({ where: { id: req.params.id }, data: d });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+---
+prisma.category.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+---
+prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+---

@@ -1,0 +1,170 @@
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
+
+const router = Router();
+
+interface SaleItemInput {
+  productId: string;
+  quantity: number;
+  discount: number;
+  discountType: string;
+}
+
+// POST /api/sales - Create a new sale
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { customerId, paymentMethod, amountReceived, notes } = req.body;
+    const items = (req.body.items || []) as SaleItemInput[];
+    if (!items.length) throw new AppError('Items required', 400);
+    if (!paymentMethod) throw new AppError('Payment method required', 400);
+    const idempotencyKey = generateIdempotencyKey();
+    const localIdFinal = generateLocalId();
+    const existing = await prisma.sale.findFirst({ where: { idempotencyKey } });
+    if (existing?.status === 'COMPLETED') return res.json({ success: true, data: existing, message: 'Already processed' });
+    const products = await Promise.all(items.map((i) => prisma.product.findUnique({ where: { id: i.productId } })));
+    for (const item of items) {
+      const p = products.find((x) => x?.id === item.productId);
+      if (!p || p.status !== 'ACTIVE') throw new AppError('Product unavailable', 400);
+      if (p.stockQuantity < item.quantity) throw new AppError('Insufficient stock', 400);
+    }
+    const business = await prisma.business.findFirst({ select: { taxRate: true } });
+    const taxRate = business?.taxRate || 0;
+    const itemsSnap = items.map((item) => {
+      const p = products.find((x) => x?.id === item.productId)!;
+      const sp = item.quantity * p.sellingPrice;
+      const d = item.discountType === 'percentage' ? roundToTwoDecimals(sp * (item.discount / 100)) : Math.min(item.discount, sp);
+      const t = roundToTwoDecimals((sp - d) * (p.taxRate || taxRate));
+      return { productId: p.id, name: p.name, sku: p.sku, quantity: item.quantity, unitPrice: p.sellingPrice, discount: d, tax: t, subtotal: roundToTwoDecimals(sp), total: roundToTwoDecimals(sp - d + t) };
+    });
+    const rawSubtotal = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.quantity * i.unitPrice, 0));
+    const totalDiscount = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.discount, 0));
+    const totalTax = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.tax, 0));
+    const grandTotal = calculateTotal(rawSubtotal, totalDiscount, totalTax);
+    if (amountReceived < grandTotal) throw new AppError('Insufficient payment', 400);
+    const change = roundToTwoDecimals(amountReceived - grandTotal);
+    const receiptNumber = generateReceiptNumber();
+    const now = new Date();
+    const sale = await prisma.sale.create({
+      data: {
+        receiptNumber, cashierId: req.user!.id, customerId, status: 'COMPLETED',
+        syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',
+        tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes,
+        deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: now, createdAt: now
+      }
+    });
+    await prisma.saleItem.createMany({
+      data: itemsSnap.map(i => ({
+        saleId: sale.id, productId: i.productId, name: i.name, sku: i.sku, quantity: i.quantity,
+        unitPrice: i.unitPrice, subtotal: i.subtotal, discount: i.discount, tax: i.tax, total: i.total
+      }))
+    });
+    await prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: amountReceived } });
+    await Promise.all(itemsSnap.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+    await Promise.all(itemsSnap.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } })));
+    if (customerId) await prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SALE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod } } });
+    await prisma.syncOperation.create({
+      data: {
+        userId: req.user!.id, entity: 'sale', entityId: sale.id, operationType: 'create',
+        payload: { saleId: sale.id, items: itemsSnap, receiptNumber, subtotal: rawSubtotal, discount: totalDiscount, tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes, customerId },
+        status: 'PENDING', localId: localIdFinal, serverId: sale.id, idempotencyKey
+      }
+    });
+    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod, createdAt: sale.createdAt }, receiptNumber, message: 'Sale completed' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sales - List sales
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const where: Record<string, unknown> = {};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.cashierId) where.cashierId = req.query.cashierId;
+    if (['CASHIER'].includes(req.user?.role || '')) where.cashierId = req.user!.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({
+        where, include: {
+          cashier: { select: { id: true, firstName: true, lastName: true } },
+          items: true, payments: true
+        },
+        orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit
+      }),
+      prisma.sale.count({ where })
+    ]);
+    res.json({ success: true, data: sales, total, page, pageSize: limit, totalPages: Math.ceil(total / limit) });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sales/:id - Get sale by ID
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const s = await prisma.sale.findUnique({
+      where: { id: req.params.id },
+      include: {
+        cashier: { select: { id: true, firstName: true, lastName: true } },
+        customer: true,
+        items: { include: { product: { select: { id: true, name: true, image: true } } } },
+        payments: true, refund: true
+      }
+    });
+    if (!s) throw new AppError('Not found', 404);
+    res.json({ success: true, data: s });
+  } catch (err) { next(err); }
+});
+
+// POST /api/sales/:id/void - Void a sale
+router.post('/:id/void', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot void', 400);
+    await prisma.sale.update({ where: { id: req.params.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
+    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: i.quantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } })));
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+    res.json({ success: true, message: 'Voided' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/sales/:id/refund - Refund a sale
+router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { reason, amountRefunded, paymentMethod } = req.body;
+    if (!reason) throw new AppError('Reason required', 400);
+    const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot refund', 400);
+    if (s.refundId) throw new AppError('Already refunded', 400);
+    const refundAmount = amountRefunded || s.total;
+    if (refundAmount > s.total) throw new AppError('Refund exceeds total', 400);
+    const refund = await prisma.refund.create({
+      data: {
+        originalSaleId: s.id, cashierId: req.user!.id, reason,
+        subtotal: s.subtotal, discount: s.discount, tax: s.tax,
+        total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,
+        amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()
+      }
+    });
+    await prisma.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: refund.id } });
+    await prisma.refundItem.createMany({
+      data: s.items.map(i => ({
+        refundId: refund.id, saleItemId: i.id, productId: i.productId, name: i.name,
+        quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total
+      }))
+    });
+    await prisma.payment.create({ data: { saleId: s.id, method: s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'REFUND', quantity: i.quantity, referenceId: s.id, notes: 'Refund' } })));
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
+    res.json({ success: true, data: refund, message: 'Refunded' });
+  } catch (err) { next(err); }
+});
+
+export { router as saleRouter };
+

@@ -1,0 +1,1361 @@
+
+===== analytics.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+// GET /api/analytics/dashboard - Dashboard stats
+router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const startOfDay = new Date();
+    startOfDay.setHours(0, 0, 0, 0);
+    const startOfWeek = new Date(startOfDay);
+    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
+    const startOfMonth = new Date();
+    startOfMonth.setDate(1);
+    startOfMonth.setHours(0, 0, 0, 0);
+    const [todaySales, weekSales, monthSales, todayRevenue, weekRevenue, monthRevenue, totalTransactions, avgTransaction, lowStock, topProducts, topCategories] = await Promise.all([
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } } }),
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } } }),
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } } }),
+      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } }, _sum: { total: true } }),
+      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } }, _sum: { total: true } }),
+      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } }, _sum: { total: true } }),
+      prisma.sale.count({ where: { status: 'COMPLETED' } }),
+      prisma.sale.aggregate({ where: { status: 'COMPLETED' }, _avg: { total: true } }),
+      prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } } }),
+      prisma.saleItem.groupBy({ by: ['productId'], _sum: { quantity: true, total: true }, orderBy: { _sum: { total: 'desc' } }, take: 10, where: { sale: { status: 'COMPLETED' } } }),
+      prisma.saleItem.groupBy({ by: ['productId'], _count: true, orderBy: { _count: { productId: 'desc' } }, take: 10 })
+    ]);
+    const topProductsData = await Promise.all(topProducts.map(async (item) => {
+      const p = await prisma.product.findUnique({ where: { id: item.productId }, select: { id: true, name: true, image: true, sku: true } });
+      return { ...p!, quantity: item._sum.quantity, total: item._sum.total };
+    }));
+    res.json({ success: true, data: {
+      today: { sales: todaySales, revenue: todayRevenue._sum.total || 0 },
+      week: { sales: weekSales, revenue: weekRevenue._sum.total || 0 },
+      month: { sales: monthSales, revenue: monthRevenue._sum.total || 0 },
+      totalTransactions,
+      avgTransaction: avgTransaction._avg.total || 0,
+      lowStock,
+      topProducts: topProductsData,
+      topCategories: topCategories.slice(0, 5)
+    } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/analytics/sales-summary - Sales summary by period
+router.get('/sales-summary', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { period = 'day', startDate, endDate } = req.query;
+    const start = startDate ? new Date(startDate as string) : new Date();
+    start.setHours(0, 0, 0, 0);
+    const end = endDate ? new Date(endDate as string) : new Date();
+    end.setHours(23, 59, 59, 999);
+    const where = { status: 'COMPLETED', createdAt: { gte: start, lte: end } };
+    const [sales, revenue, transactions, avg, byPayment] = await Promise.all([
+      prisma.sale.count({ where }),
+      prisma.sale.aggregate({ where, _sum: { total: true } }),
+      prisma.sale.count({ where }),
+      prisma.sale.aggregate({ where, _avg: { total: true } }),
+      prisma.payment.groupBy({ by: ['method'], _sum: { amount: true }, where: { sale: { status: 'COMPLETED', createdAt: { gte: start, lte: end } } }, orderBy: { _sum: { amount: 'desc' } } })
+    ]);
+    res.json({ success: true, data: { sales, revenue: revenue._sum.total || 0, transactions, avg: avg._avg.total || 0, byPayment } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/analytics/inventory-summary - Inventory summary
+router.get('/inventory-summary', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const [totalProducts, activeProducts, lowStock, outOfStock, totalStockValue, totalCostValue] = await Promise.all([
+      prisma.product.count(),
+      prisma.product.count({ where: { status: 'ACTIVE' } }),
+      prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } } }),
+      prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: 0 } }),
+      prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { stockQuantity: true } }),
+      prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { costPrice: true } })
+    ]);
+    res.json({ success: true, data: { totalProducts, activeProducts, lowStock, outOfStock, totalStockValue: totalStockValue._sum.stockQuantity || 0, totalCostValue: totalCostValue._sum.costPrice || 0 } });
+  } catch (err) { next(err); }
+});
+
+export { router as analyticsRouter };
+
+===== auth.ts =====
+import { Router } from 'express';
+import { z } from 'zod';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { hashPassword, verifyPassword, signToken, generateDeviceId } from '../utils/helpers.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+const loginSchema = z.object({ email: z.string().email('Invalid email'), password: z.string().min(1, 'Password required') });
+const registerSchema = z.object({ email: z.string().email('Invalid email'), username: z.string().min(3), password: z.string().min(8), firstName: z.string().min(1), lastName: z.string().min(1), role: z.enum(['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF']).default('CASHIER'), phone: z.string().optional() });
+
+router.post('/login', async (req, res, next) => {
+  try {
+    const { email, password } = loginSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user || user.status !== 'ACTIVE') throw new AppError('Invalid credentials', 401);
+    const ok = await verifyPassword(password, user.passwordHash);
+    if (!ok) throw new AppError('Invalid credentials', 401);
+    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
+    const token = signToken({ userId: user.id, email: user.email, role: user.role }, '7d');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await prisma.session.create({ data: { userId: user.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+    let deviceId = req.headers['x-device-id'] as string || generateDeviceId();
+    const device = await prisma.device.upsert({ where: { deviceId }, update: { name: req.headers['x-device-name'] as string || 'POS', lastSeen: new Date(), onlineStatus: true }, create: { deviceId, name: req.headers['x-device-name'] as string || 'POS', userId: user.id, onlineStatus: true } });
+    const deviceToken = signToken({ deviceId, type: 'device' }, '30d');
+    await prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });
+    await prisma.auditLog.create({ data: { userId: user.id, action: 'LOGIN', entity: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+    res.json({ success: true, data: { user: { id: user.id, email: user.email, username: user.username, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status }, token, deviceToken, deviceId: device.id, expiresAt } });
+  } catch (err) { next(err); }
+});
+
+router.get('/me', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, avatar: true, lastLogin: true, createdAt: true } });
+    if (!u) throw new AppError('Not found', 404);
+    res.json({ success: true, data: u });
+  } catch (err) { next(err); }
+});
+
+router.post('/logout', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const tok = req.headers.authorization?.split(' ')[1];
+    if (tok) await prisma.session.deleteMany({ where: { token: tok, userId: req.user!.id } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'LOGOUT', entity: 'user', entityId: req.user!.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+    res.json({ success: true, message: 'Logged out' });
+  } catch (err) { next(err); }
+});
+
+router.post('/refresh', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const old = req.headers.authorization?.split(' ')[1];
+    if (!old) throw new AppError('No token', 400);
+    await prisma.session.deleteMany({ where: { token: old, userId: req.user!.id } });
+    const token = signToken({ userId: req.user!.id, email: req.user!.email, role: req.user!.role }, '7d');
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const session = await prisma.session.create({ data: { userId: req.user!.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
+    res.json({ success: true, data: { token, expiresAt } });
+  } catch (err) { next(err); }
+});
+
+router.post('/change-password', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+    if (!currentPassword || !newPassword) throw new AppError('Both passwords required', 400);
+    if (newPassword.length < 8) throw new AppError('New password must be 8+ chars', 400);
+    const user = await prisma.user.findUnique({ where: { id: req.user!.id } });
+    if (!user) throw new AppError('Not found', 404);
+    const ok = await verifyPassword(currentPassword, user.passwordHash);
+    if (!ok) throw new AppError('Current password incorrect', 401);
+    const hash = await hashPassword(newPassword);
+    await prisma.user.update({ where: { id: req.user!.id }, data: { passwordHash: hash } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CHANGE_PASSWORD', entity: 'user', entityId: req.user!.id, ipAddress: req.ip } });
+    res.json({ success: true, message: 'Password changed' });
+  } catch (err) { next(err); }
+});
+
+export { router as authRouter };
+
+===== categories.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { z } from 'zod';
+
+const router = Router();
+
+const createSchema = z.object({ name: z.string().min(1), description: z.string().optional(), image: z.string().optional(), parentId: z.string().uuid().optional() });
+const updateSchema = createSchema.partial();
+
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const cats = await prisma.category.findMany({ where: { deletedAt: null }, include: { _count: { select: { products: true } } }, orderBy: { name: 'asc' } });
+    res.json({ success: true, data: cats });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id', async (req, res, next) => {
+  try {
+    const c = await prisma.category.findUnique({ where: { id: req.params.id }, include: { parent: { select: { id: true, name: true } }, children: { select: { id: true, name: true } } } });
+    if (!c) throw new AppError('Not found', 404);
+    res.json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const d = createSchema.parse(req.body);
+    if (d.parentId) { const p = await prisma.category.findUnique({ where: { id: d.parentId } }); if (!p) throw new AppError('Parent not found', 404); }
+    const c = await prisma.category.create({ data: { name: d.name, description: d.description, image: d.image, parentId: d.parentId || null } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+    res.status(201).json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+router.put('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const d = updateSchema.parse(req.body);
+    const e = await prisma.category.findUnique({ where: { id: req.params.id } });
+    if (!e) throw new AppError('Not found', 404);
+    const c = await prisma.category.update({ where: { id: req.params.id }, data: d });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+    res.json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const c = await prisma.category.update({ where: { id: req.params.id }, data: { deletedAt: new Date() } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CATEGORY', entity: 'category', entityId: c.id, details: { name: c.name } } });
+    res.json({ success: true, message: 'Deleted' });
+  } catch (err) { next(err); }
+});
+
+export { router as categoryRouter };
+
+===== customers.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { generateLocalId } from '../utils/helpers.js';
+
+const router = Router();
+
+// GET /api/customers - List customers
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const where: Record<string, unknown> = {};
+    if (req.query.search) {
+      where.OR = [
+        { name: { contains: req.query.search as string, mode: 'insensitive' } },
+        { email: { contains: req.query.search as string, mode: 'insensitive' } },
+        { phone: { contains: req.query.search as string, mode: 'insensitive' } },
+        { barcode: { contains: req.query.search as string, mode: 'insensitive' } },
+      ];
+    }
+    if (req.query.status) where.status = req.query.status;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const [customers, total] = await Promise.all([
+      prisma.customer.findMany({
+        where,
+        include: { _count: { select: { purchases: true } } },
+        orderBy: { totalSpent: 'desc' },
+        skip: (page - 1) * limit,
+        take: limit,
+      }),
+      prisma.customer.count({ where }),
+    ]);
+    res.json({ success: true, data: customers, total, page, pageSize: limit, totalPages: Math.ceil(total / limit) });
+  } catch (err) { next(err); }
+});
+
+// GET /api/customers/:id
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const c = await prisma.customer.findUnique({
+      where: { id: req.params.id },
+      include: {
+        purchases: {
+          include: { sale: { include: { items: true, cashier: { select: { firstName: true, lastName: true } } } } },
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+        },
+      },
+    });
+    if (!c) throw new AppError('Not found', 404);
+    res.json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers - Create customer
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { name, email, phone, address, notes, barcode } = req.body;
+    if (!name) throw new AppError('Name required', 400);
+    if (email && await prisma.customer.findFirst({ where: { email } })) throw new AppError('Email exists', 409);
+    if (barcode && await prisma.customer.findFirst({ where: { barcode } })) throw new AppError('Barcode exists', 409);
+    const localId = generateLocalId();
+    const c = await prisma.customer.create({
+      data: { name, email, phone, address, notes, barcode, localId },
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CUSTOMER', entity: 'customer', entityId: c.id, details: { name: c.name } } });
+    res.status(201).json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/customers/:id
+router.put('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const c = await prisma.customer.findUnique({ where: { id: req.params.id } });
+    if (!c) throw new AppError('Not found', 404);
+    const { name, email, phone, address, notes, barcode, status } = req.body;
+    if (email && email !== c.email && await prisma.customer.findFirst({ where: { email, id: { not: req.params.id } } })) throw new AppError('Email exists', 409);
+    if (barcode && barcode !== c.barcode && await prisma.customer.findFirst({ where: { barcode, id: { not: req.params.id } } })) throw new AppError('Barcode exists', 409);
+    const u = await prisma.customer.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(email && { email }),
+        ...(phone !== undefined && { phone }),
+        ...(address !== undefined && { address }),
+        ...(notes !== undefined && { notes }),
+        ...(barcode !== undefined && { barcode }),
+        ...(status && { status }),
+      },
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_CUSTOMER', entity: 'customer', entityId: u.id, details: { customerId: u.id } } });
+    res.json({ success: true, data: u });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/customers/:id
+router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const c = await prisma.customer.findUnique({ where: { id: req.params.id } });
+    if (!c) throw new AppError('Not found', 404);
+    await prisma.customer.delete({ where: { id: req.params.id } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_CUSTOMER', entity: 'customer', entityId: req.params.id, details: { name: c.name } } });
+    res.json({ success: true, message: 'Deleted' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/customers/barcode/:barcode
+router.get('/barcode/:barcode', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const c = await prisma.customer.findFirst({ where: { barcode: req.params.barcode } });
+    if (!c) throw new AppError('Not found', 404);
+    res.json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+export { router as customerRouter };
+
+===== health.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+
+const router = Router();
+
+router.get('/', async (req, res) => {
+  try {
+    await prisma.$queryRaw`SELECT 1`;
+    res.json({ status: 'ok', database: 'connected', uptime: process.uptime() });
+  } catch {
+    res.status(500).json({ status: 'error', database: 'disconnected' });
+  }
+});
+
+export { router as healthRouter };
+
+===== inventory.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+// POST /api/inventory/adjust - Adjust stock
+router.post('/adjust', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { productId, quantity, reason, notes } = req.body;
+    if (!productId || quantity === undefined) throw new AppError('Product ID and quantity required', 400);
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new AppError('Product not found', 404);
+    const newStock = Math.max(0, (product.stockQuantity || 0) + quantity);
+    await prisma.$transaction([
+      prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),
+      prisma.inventoryMovement.create({
+        data: {
+          productId, userId: req.user!.id, type: 'ADJUSTMENT',
+          quantity, previousStock: product.stockQuantity || 0, newStock,
+          reason: reason || 'Manual adjustment', notes, referenceId: null
+        }
+      })
+    ]);
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'ADJUST_STOCK', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+    res.json({ success: true, data: { productId, previousStock: product.stockQuantity, newStock, quantity }, message: 'Stock adjusted' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/stock-in - Stock in
+router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { productId, quantity, unitPrice, supplierId, purchaseOrder, notes } = req.body;
+    if (!productId || !quantity || quantity <= 0) throw new AppError('Valid product and quantity required', 400);
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new AppError('Product not found', 404);
+    const newStock = (product.stockQuantity || 0) + quantity;
+    const unitPriceFinal = unitPrice || product.costPrice || 0;
+    await prisma.$transaction([
+      prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock, costPrice: unitPriceFinal } }),
+      prisma.inventoryMovement.create({
+        data: {
+          productId, userId: req.user!.id, type: 'STOCK_IN',
+          quantity, unitPrice: unitPriceFinal, previousStock: product.stockQuantity || 0, newStock,
+          reason: 'Stock in', notes, referenceId: purchaseOrder || null
+        }
+      })
+    ]);
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_IN', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, unitPrice: unitPriceFinal, supplierId, purchaseOrder } } });
+    res.json({ success: true, data: { productId, previousStock: product.stockQuantity, newStock, quantity, unitPrice: unitPriceFinal }, message: 'Stock added' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/stock-out - Stock out
+router.post('/stock-out', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { productId, quantity, reason, notes } = req.body;
+    if (!productId || !quantity || quantity <= 0) throw new AppError('Valid product and quantity required', 400);
+    const product = await prisma.product.findUnique({ where: { id: productId } });
+    if (!product) throw new AppError('Product not found', 404);
+    if ((product.stockQuantity || 0) < quantity) throw new AppError('Insufficient stock', 400);
+    const newStock = (product.stockQuantity || 0) - quantity;
+    await prisma.$transaction([
+      prisma.product.update({ where: { id: productId }, data: { stockQuantity: newStock } }),
+      prisma.inventoryMovement.create({
+        data: { productId, userId: req.user!.id, type: 'STOCK_OUT', quantity, previousStock: product.stockQuantity || 0, newStock, reason: reason || 'Stock out', notes, referenceId: null }
+      })
+    ]);
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_OUT', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, reason } } });
+    res.json({ success: true, data: { productId, previousStock: product.stockQuantity, newStock, quantity }, message: 'Stock removed' });
+  } catch (err) { next(err); }
+});
+
+
+// Stock history
+router.get('/movements', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { productId, type, page = '1', limit = '50' } = req.query;
+    const where: Record<string, unknown> = {};
+    if (productId) where.productId = productId;
+    if (type) where.type = type;
+    const p = parseInt(page as string) || 1;
+    const l = parseInt(limit as string) || 50;
+    const [movements, total] = await Promise.all([
+      prisma.inventoryMovement.findMany({
+        where,
+        include: {
+          product: { select: { id: true, name: true, sku: true } },
+          user: { select: { id: true, firstName: true, lastName: true } }
+        },
+        orderBy: { createdAt: 'desc' }, skip: (p - 1) * l, take: l
+      }),
+      prisma.inventoryMovement.count({ where })
+    ]);
+    res.json({ success: true, data: movements, total, page: p, pageSize: l, totalPages: Math.ceil(total / l) });
+  } catch (err) { next(err); }
+});
+
+// Low stock
+router.get('/low-stock', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE', stockQuantity: { lt: 10 }, stockQuantity: { gt: 0 } },
+      select: { id: true, name: true, sku: true, barcode: true, stockQuantity: true, minimumStock: true, sellingPrice: true, image: true }
+    });
+    res.json({ success: true, data: products });
+  } catch (err) { next(err); }
+});
+
+// Out of stock
+router.get('/out-of-stock', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE', stockQuantity: 0 },
+      select: { id: true, name: true, sku: true, barcode: true, stockQuantity: true, minimumStock: true, sellingPrice: true, image: true }
+    });
+    res.json({ success: true, data: products });
+  } catch (err) { next(err); }
+});
+
+export { router as inventoryRouter };
+
+===== products.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      orderBy: { name: 'asc' },
+      take: 100,
+    });
+    res.json({ success: true, data: products });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const p = await prisma.product.findUnique({ where: { id: req.params.id } });
+    if (!p) throw new AppError('Not found', 404);
+    res.json({ success: true, data: p });
+  } catch (err) { next(err); }
+});
+
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const p = await prisma.product.create({ data: req.body });
+    res.status(201).json({ success: true, data: p });
+  } catch (err) { next(err); }
+});
+
+export { router as productRouter };
+
+===== purchases.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const purchases = await prisma.purchase.findMany({
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    res.json({ success: true, data: purchases });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const p = await prisma.purchase.findUnique({ where: { id: req.params.id } });
+    if (!p) throw new AppError('Not found', 404);
+    res.json({ success: true, data: p });
+  } catch (err) { next(err); }
+});
+
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const p = await prisma.purchase.create({ data: req.body });
+    res.status(201).json({ success: true, data: p });
+  } catch (err) { next(err); }
+});
+
+export { router as purchaseRouter };
+
+===== reports.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+// GET /api/reports/sales - Sales report
+router.get('/sales', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    start.setHours(0, 0, 0, 0);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const sales = await prisma.sale.findMany({
+      where: {
+        status: { in: ['COMPLETED', 'REFUNDED'] },
+        createdAt: { gte: start, lte: end },
+      },
+      include: {
+        cashier: { select: { firstName: true, lastName: true } },
+        items: true,
+        payments: true,
+        refund: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    const summary = await prisma.sale.aggregate({
+      where: {
+        status: 'COMPLETED',
+        createdAt: { gte: start, lte: end },
+      },
+      _sum: { total: true, discount: true, tax: true, change: true },
+      _count: true,
+    });
+    const byPayment = await prisma.payment.groupBy({
+      by: ['method'],
+      _sum: { amount: true },
+      where: {
+        sale: {
+          status: 'COMPLETED',
+          createdAt: { gte: start, lte: end },
+        },
+      },
+      orderBy: { _sum: { amount: 'desc' } },
+    });
+    res.json({
+      success: true,
+      data: sales,
+      meta: {
+        totalSales: sales.length,
+        totalRevenue: summary._sum.total || 0,
+        totalDiscount: summary._sum.discount || 0,
+        totalTax: summary._sum.tax || 0,
+        totalChange: summary._sum.change || 0,
+        transactionCount: summary._count,
+        avgTransaction: summary._count > 0 ? (summary._sum.total || 0) / summary._count : 0,
+        byPayment,
+        period: { start, end },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reports/inventory - Inventory report
+router.get('/inventory', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        category: { select: { id: true, name: true } },
+      },
+      orderBy: { stockQuantity: 'asc' },
+    });
+    const summary = await prisma.product.aggregate({
+      where: { status: 'ACTIVE' },
+      _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },
+      _count: true,
+    });
+    const lowStockProducts = products.filter((p) => p.stockQuantity < 10 && p.stockQuantity > 0);
+    const outOfStockProducts = products.filter((p) => p.stockQuantity === 0);
+    const totalValue = (summary._sum.sellingPrice || 0) * 1;
+    const totalCost = (summary._sum.costPrice || 0) * 1;
+    res.json({
+      success: true,
+      data: {
+        products,
+        summary: {
+          totalProducts: summary._count,
+          totalStock: summary._sum.stockQuantity || 0,
+          totalValue,
+          totalCost,
+          potentialProfit: totalValue - totalCost,
+        },
+        alerts: {
+          lowStock: lowStockProducts.length,
+          outOfStock: outOfStockProducts.length,
+          lowStockProducts: lowStockProducts.slice(0, 20),
+          outOfStockProducts: outOfStockProducts.slice(0, 20),
+        },
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reports/products - Products report
+router.get('/products', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const products = await prisma.product.findMany({
+      where: { status: 'ACTIVE' },
+      include: {
+        category: { select: { id: true, name: true, image: true } },
+        supplier: { select: { id: true, name: true, email: true, contactInfo: true } },
+      },
+      orderBy: { name: 'asc' },
+    });
+    const summary = await prisma.product.aggregate({
+      where: { status: 'ACTIVE' },
+      _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },
+      _count: true,
+    });
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      include: {
+        _count: { select: { products: true } },
+        _sum: { products: { select: { stockQuantity: true } } },
+      },
+      orderBy: { name: 'asc' },
+    });
+    const categoryStats = categories.map((cat) => ({
+      id: cat.id,
+      name: cat.name,
+      image: cat.image,
+      productCount: cat._count.products,
+      totalStock: cat._sum.products.stockQuantity || 0,
+    }));
+    res.json({
+      success: true,
+      data: products,
+      meta: {
+        totalProducts: summary._count,
+        totalStock: summary._sum.stockQuantity || 0,
+        totalInventoryValue: summary._sum.sellingPrice || 0,
+        totalCost: summary._sum.costPrice || 0,
+        categories: categoryStats,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// GET /api/reports/cashiers - Cashier performance report
+router.get('/cashiers', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const cashiers = await prisma.sale.groupBy({
+      by: ['cashierId'],
+      _sum: { total: true, discount: true },
+      _count: { id: true },
+      where: { status: 'COMPLETED' },
+      orderBy: { _sum: { total: 'desc' } },
+    });
+    const cashierDetails = await Promise.all(
+      cashiers.map(async (c) => {
+        if (!c.cashierId) return null;
+        const user = await prisma.user.findUnique({
+          where: { id: c.cashierId },
+          select: { id: true, firstName: true, lastName: true, email: true, role: true },
+        });
+        if (!user) return null;
+        return {
+          id: c.cashierId,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          email: user.email,
+          role: user.role,
+          salesCount: c._count.id,
+          totalRevenue: c._sum.total || 0,
+          totalDiscount: c._sum.discount || 0,
+          avgSale: c._count.id > 0 ? (c._sum.total || 0) / c._count.id : 0,
+        };
+      })
+    );
+    const validCashiers = cashierDetails.filter(Boolean);
+    const totalRevenue = validCashiers.reduce((sum, c) => sum + (c.totalRevenue || 0), 0);
+    const topCashier = validCashiers[0];
+    const avgPerCashier = validCashiers.length > 0 ? totalRevenue / validCashiers.length : 0;
+    res.json({
+      success: true,
+      data: validCashiers,
+      meta: {
+        totalCashiers: validCashiers.length,
+        totalRevenue,
+        avgPerCashier,
+        topCashier,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+
+
+// GET /api/reports/customers - Customer purchasing report
+router.get('/customers', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const customers = await prisma.customer.findMany({
+      include: {
+        _count: { select: { purchases: true } },
+        purchases: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+          include: { sale: { include: { items: true } } },
+        },
+      },
+      orderBy: { totalSpent: 'desc' },
+    });
+    const summary = await prisma.customer.aggregate({
+      _sum: { totalSpent: true },
+      _count: true,
+    });
+    const totalCustomers = summary._count;
+    const totalSpent = summary._sum.totalSpent || 0;
+    const avgSpent = totalCustomers > 0 ? totalSpent / totalCustomers : 0;
+    const topCustomers = customers.slice(0, 10);
+    res.json({
+      success: true,
+      data: customers,
+      meta: {
+        totalCustomers,
+        totalSpent,
+        avgSpent,
+        topCustomers,
+      },
+    });
+  } catch (err) {
+    next(err);
+  }
+});
+
+export { router as reportRouter };
+
+===== sales.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
+
+const router = Router();
+
+// POST /api/sales - Create a new sale
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { items, customerId, paymentMethod, amountReceived, notes } = req.body;
+    if (!items?.length) throw new AppError('Items required', 400);
+    if (!paymentMethod) throw new AppError('Payment method required', 400);
+    const idempotencyKey = generateIdempotencyKey();
+    const localIdFinal = generateLocalId();
+    const existing = await prisma.sale.findFirst({ where: { idempotencyKey } });
+    if (existing?.status === 'COMPLETED') return res.json({ success: true, data: existing, message: 'Already processed' });
+    const products = await Promise.all(items.map((i: { productId: string }) => prisma.product.findUnique({ where: { id: i.productId } })));
+    for (const item of items) {
+      const p = products.find((x) => x?.id === item.productId);
+      if (!p || p.status !== 'ACTIVE') throw new AppError('Product unavailable', 400);
+      if (p.stockQuantity < item.quantity) throw new AppError('Insufficient stock', 400);
+    }
+    const business = await prisma.business.findFirst({ select: { taxRate: true } });
+    const taxRate = business?.taxRate || 0;
+    const itemsSnap = items.map((item: { productId: string; quantity: number; discount: number; discountType: string }) => {
+      const p = products.find((x) => x?.id === item.productId)!;
+      const sp = item.quantity * p.sellingPrice;
+      const d = item.discountType === 'percentage' ? roundToTwoDecimals(sp * (item.discount / 100)) : Math.min(item.discount, sp);
+      const t = roundToTwoDecimals((sp - d) * (p.taxRate || taxRate));
+      return { productId: p.id, name: p.name, sku: p.sku, quantity: item.quantity, unitPrice: p.sellingPrice, discount: d, tax: t, subtotal: roundToTwoDecimals(sp), total: roundToTwoDecimals(sp - d + t) };
+    });
+    const rawSubtotal = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.quantity * i.unitPrice, 0));
+    const totalDiscount = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.discount, 0));
+    const totalTax = roundToTwoDecimals(itemsSnap.reduce((s, i) => s + i.tax, 0));
+    const grandTotal = calculateTotal(rawSubtotal, totalDiscount, totalTax);
+    if (amountReceived < grandTotal) throw new AppError('Insufficient payment', 400);
+    const change = roundToTwoDecimals(amountReceived - grandTotal);
+    const receiptNumber = generateReceiptNumber();
+    const now = new Date();
+    const sale = await prisma.sale.create({
+      data: {
+        receiptNumber, cashierId: req.user!.id, customerId, status: 'COMPLETED',
+        syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',
+        tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes,
+        deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: now, createdAt: now
+      }
+    });
+    await prisma.saleItem.createMany({
+      data: itemsSnap.map(i => ({
+        saleId: sale.id, productId: i.productId, name: i.name, sku: i.sku, quantity: i.quantity,
+        unitPrice: i.unitPrice, subtotal: i.subtotal, discount: i.discount, tax: i.tax, total: i.total
+      }))
+    });
+    await prisma.payment.create({ data: { saleId: sale.id, method: paymentMethod, amount: amountReceived } });
+    await Promise.all(itemsSnap.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { decrement: i.quantity } } })));
+    await Promise.all(itemsSnap.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'SALE', quantity: -i.quantity, referenceId: sale.id, notes: `Sale ${receiptNumber}` } })));
+    if (customerId) await prisma.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SALE', entity: 'sale', entityId: sale.id, details: { receiptNumber, total: grandTotal, paymentMethod } } });
+    await prisma.syncOperation.create({
+      data: {
+        userId: req.user!.id, entity: 'sale', entityId: sale.id, operationType: 'create',
+        payload: { saleId: sale.id, items: itemsSnap, receiptNumber, subtotal: rawSubtotal, discount: totalDiscount, tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes, customerId },
+        status: 'PENDING', localId: localIdFinal, serverId: sale.id, idempotencyKey
+      }
+    });
+    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod, createdAt: sale.createdAt }, receiptNumber, message: 'Sale completed' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sales - List sales
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const where: Record<string, unknown> = {};
+    if (req.query.status) where.status = req.query.status;
+    if (req.query.cashierId) where.cashierId = req.query.cashierId;
+    if (['CASHIER'].includes(req.user?.role || '')) where.cashierId = req.user!.id;
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 50;
+    const [sales, total] = await Promise.all([
+      prisma.sale.findMany({
+        where, include: {
+          cashier: { select: { id: true, firstName: true, lastName: true } },
+          items: true, payments: true
+        },
+        orderBy: { createdAt: 'desc' }, skip: (page - 1) * limit, take: limit
+      }),
+      prisma.sale.count({ where })
+    ]);
+    res.json({ success: true, data: sales, total, page, pageSize: limit, totalPages: Math.ceil(total / limit) });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sales/:id - Get sale by ID
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const s = await prisma.sale.findUnique({
+      where: { id: req.params.id },
+      include: {
+        cashier: { select: { id: true, firstName: true, lastName: true } },
+        customer: true,
+        items: { include: { product: { select: { id: true, name: true, image: true } } } },
+        payments: true, refund: true
+      }
+    });
+    if (!s) throw new AppError('Not found', 404);
+    res.json({ success: true, data: s });
+  } catch (err) { next(err); }
+});
+
+// POST /api/sales/:id/void - Void a sale
+router.post('/:id/void', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot void', 400);
+    await prisma.sale.update({ where: { id: req.params.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
+    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: i.quantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } })));
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+    res.json({ success: true, message: 'Voided' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/sales/:id/refund - Refund a sale
+router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { reason, amountRefunded, paymentMethod } = req.body;
+    if (!reason) throw new AppError('Reason required', 400);
+    const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
+    if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot refund', 400);
+    if (s.refundId) throw new AppError('Already refunded', 400);
+    const refundAmount = amountRefunded || s.total;
+    if (refundAmount > s.total) throw new AppError('Refund exceeds total', 400);
+    const refund = await prisma.refund.create({
+      data: {
+        originalSaleId: s.id, cashierId: req.user!.id, reason,
+        subtotal: s.subtotal, discount: s.discount, tax: s.tax,
+        total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,
+        amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()
+      }
+    });
+    await prisma.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: refund.id } });
+    await prisma.refundItem.createMany({
+      data: s.items.map(i => ({
+        refundId: refund.id, saleItemId: i.id, productId: i.productId, name: i.name,
+        quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total
+      }))
+    });
+    await prisma.payment.create({ data: { saleId: s.id, method: s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
+    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'REFUND', quantity: i.quantity, referenceId: s.id, notes: 'Refund' } })));
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
+    res.json({ success: true, data: refund, message: 'Refunded' });
+  } catch (err) { next(err); }
+});
+
+export { router as saleRouter };
+
+
+===== settings.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+// GET /api/settings - Get all settings
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user?.role !== 'ADMIN') throw new AppError('Forbidden', 403);
+    const [business, settings] = await Promise.all([
+      prisma.business.findFirst({ select: { id: true, name: true, phone: true, email: true, address: true, taxRate: true, currency: true, receiptPrefix: true, logo: true } }),
+      prisma.settings.findFirst()
+    ]);
+    const receiptSettings = settings?.receiptSettings ? JSON.parse(settings.receiptSettings) : null;
+    res.json({ success: true, data: { business, receiptSettings, taxRate: settings?.taxRate, currency: settings?.currency || 'USD' } });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/settings - Update all settings
+router.put('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user?.role !== 'ADMIN') throw new AppError('Forbidden', 403);
+    const { business, receiptSettings, taxRate, currency, defaultStore } = req.body;
+    const existing = await prisma.business.findFirst();
+    const bizId = existing?.id || 'default';
+    await Promise.all([
+      prisma.business.upsert({
+        where: { id: bizId },
+        update: {
+          ...(business?.name && { name: business.name }),
+          ...(business?.phone && { phone: business.phone }),
+          ...(business?.email && { email: business.email }),
+          ...(business?.address && { address: business.address }),
+          ...(business?.taxRate !== undefined && { taxRate: business.taxRate }),
+          ...(business?.currency && { currency: business.currency }),
+          ...(business?.receiptPrefix && { receiptPrefix: business.receiptPrefix }),
+          ...(business?.logo !== undefined && { logo: business.logo }),
+        },
+        create: {
+          id: 'default',
+          name: business?.name || 'Business',
+          phone: business?.phone || '',
+          email: business?.email || '',
+          address: business?.address || '',
+          taxRate: business?.taxRate || 0,
+          currency: business?.currency || 'USD',
+          receiptPrefix: business?.receiptPrefix || 'REC',
+          logo: business?.logo || null,
+        }
+      }),
+      prisma.settings.upsert({
+        where: { id: 'default' },
+        update: {
+          ...(receiptSettings !== undefined && { receiptSettings: JSON.stringify(receiptSettings) }),
+          ...(taxRate !== undefined && { taxRate }),
+          ...(currency && { currency }),
+          ...(defaultStore !== undefined && { defaultStore }),
+        },
+        create: {
+          id: 'default',
+          receiptSettings: receiptSettings ? JSON.stringify(receiptSettings) : JSON.stringify({ printer: 'default', footer: '', showBarcode: true }),
+          taxRate: taxRate || 0,
+          currency: currency || 'USD',
+          defaultStore: defaultStore || 'main',
+        }
+      }),
+    ]);
+    res.json({ success: true, message: 'Settings updated' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/settings/sync-status - Get sync status
+router.get('/sync-status', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const [pending, failed, lastSync] = await Promise.all([
+      prisma.syncOperation.count({ where: { status: 'PENDING' } }),
+      prisma.syncOperation.count({ where: { status: 'FAILED' } }),
+      prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } })
+    ]);
+    res.json({ success: true, data: { pending, failed, lastSync } });
+  } catch (err) { next(err); }
+});
+
+// POST /api/settings/trigger-sync - Manually trigger sync
+router.post('/trigger-sync', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user?.role !== 'ADMIN') throw new AppError('Forbidden', 403);
+    const pending = await prisma.syncOperation.findMany({ where: { status: 'PENDING' }, take: 100, orderBy: { createdAt: 'asc' } });
+    const processed = await Promise.all(pending.map(async (op) => {
+      try {
+        // Sync operations would be processed here
+        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'COMPLETED', completedAt: new Date() } });
+        return { id: op.id, status: 'completed' };
+      } catch {
+        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'FAILED' } });
+        return { id: op.id, status: 'failed' };
+      }
+    }));
+    res.json({ success: true, data: { processed: processed.length, results: processed } });
+  } catch (err) { next(err); }
+});
+
+export { router as settingsRouter };
+
+===== suppliers.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { generateLocalId } from '../utils/helpers.js';
+
+const router = Router();
+
+// GET /api/suppliers - List suppliers
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { search, isActive, page = '1', limit = '50' } = req.query;
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { name: { contains: search as string, mode: 'insensitive' } },
+        { email: { contains: search as string, mode: 'insensitive' } },
+        { contactInfo: { contains: search as string, mode: 'insensitive' } },
+      ];
+    }
+    if (isActive !== undefined) where.isActive = isActive === 'true';
+    const p = parseInt(page as string) || 1;
+    const l = parseInt(limit as string) || 50;
+    const [suppliers, total] = await Promise.all([
+      prisma.supplier.findMany({
+        where,
+        include: { _count: { select: { products: true, purchases: true } } },
+        orderBy: { name: 'asc' },
+        skip: (p - 1) * l,
+        take: l,
+      }),
+      prisma.supplier.count({ where }),
+    ]);
+    res.json({ success: true, data: suppliers, total, page: p, pageSize: l, totalPages: Math.ceil(total / l) });
+  } catch (err) { next(err); }
+});
+
+// GET /api/suppliers/:id
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const s = await prisma.supplier.findUnique({
+      where: { id: req.params.id },
+      include: { products: { select: { id: true, name: true, sku: true, stockQuantity: true, sellingPrice: true } }, purchases: { orderBy: { createdAt: 'desc' }, take: 10, include: { items: true } } },
+    });
+    if (!s) throw new AppError('Not found', 404);
+    res.json({ success: true, data: s });
+  } catch (err) { next(err); }
+});
+
+// POST /api/suppliers - Create supplier
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { name, email, phone, contactInfo, address, notes, isActive = true } = req.body;
+    if (!name) throw new AppError('Name required', 400);
+    const localId = generateLocalId();
+    const s = await prisma.supplier.create({ data: { name, email, phone, contactInfo, address, notes, isActive, localId } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_SUPPLIER', entity: 'supplier', entityId: s.id, details: { name: s.name } } });
+    res.status(201).json({ success: true, data: s });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/suppliers/:id
+router.put('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { name, email, phone, contactInfo, address, notes, isActive } = req.body;
+    const s = await prisma.supplier.findUnique({ where: { id: req.params.id } });
+    if (!s) throw new AppError('Not found', 404);
+    const u = await prisma.supplier.update({
+      where: { id: req.params.id },
+      data: {
+        ...(name && { name }),
+        ...(email !== undefined && { email }),
+        ...(phone !== undefined && { phone }),
+        ...(contactInfo !== undefined && { contactInfo }),
+        ...(address !== undefined && { address }),
+        ...(notes !== undefined && { notes }),
+        ...(isActive !== undefined && { isActive }),
+      },
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_SUPPLIER', entity: 'supplier', entityId: u.id, details: { supplierId: u.id } } });
+    res.json({ success: true, data: u });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/suppliers/:id
+router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const s = await prisma.supplier.findUnique({ where: { id: req.params.id } });
+    if (!s) throw new AppError('Not found', 404);
+    await prisma.supplier.update({ where: { id: req.params.id }, data: { isActive: false } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DELETE_SUPPLIER', entity: 'supplier', entityId: req.params.id, details: { name: s.name } } });
+    res.json({ success: true, message: 'Supplier deactivated' });
+  } catch (err) { next(err); }
+});
+
+export { router as supplierRouter };
+
+===== sync.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+
+const router = Router();
+
+// GET /api/sync/operations - Get sync operations
+router.get('/operations', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { limit = '50', offset = '0', status } = req.query;
+    const where: Record<string, unknown> = {};
+    if (status) where.status = status;
+    const l = parseInt(limit as string) || 50;
+    const o = parseInt(offset as string) || 0;
+    const [ops, total] = await Promise.all([
+      prisma.syncOperation.findMany({ where, orderBy: { createdAt: 'desc' }, skip: o, take: l, include: { user: { select: { id: true, firstName: true, lastName: true } } } }),
+      prisma.syncOperation.count({ where })
+    ]);
+    res.json({ success: true, data: ops, total, limit: l, offset: o });
+  } catch (err) { next(err); }
+});
+
+// PUT /api/sync/retry/:id - Retry a failed sync
+router.put('/retry/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user!.role !== 'ADMIN') throw new AppError('Forbidden', 403);
+    const op = await prisma.syncOperation.findUnique({ where: { id: req.params.id } });
+    if (!op) throw new AppError('Not found', 404);
+    await prisma.syncOperation.update({ where: { id: req.params.id }, data: { status: 'PENDING', retryCount: { increment: 1 }, updatedAt: new Date() } });
+    res.json({ success: true, message: 'Retry queued' });
+  } catch (err) { next(err); }
+});
+
+// DELETE /api/sync/:id - Delete a sync operation
+router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user!.role !== 'ADMIN') throw new AppError('Forbidden', 403);
+    await prisma.syncOperation.delete({ where: { id: req.params.id } });
+    res.json({ success: true, message: 'Deleted' });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sync/queue - Get sync queue count
+router.get('/queue', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const [pending, failed, processing] = await Promise.all([
+      prisma.syncOperation.count({ where: { status: 'PENDING' } }),
+      prisma.syncOperation.count({ where: { status: 'FAILED' } }),
+      prisma.syncOperation.count({ where: { status: 'PROCESSING' } })
+    ]);
+    res.json({ success: true, data: { pending, failed, processing } });
+  } catch (err) { next(err); }
+});
+
+// GET /api/sync/status - Sync status
+router.get('/status', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const lastSync = await prisma.syncOperation.findFirst({ orderBy: { createdAt: 'desc' }, select: { id: true, status: true, createdAt: true, entity: true } });
+    res.json({ success: true, data: { lastSync, online: true } });
+  } catch (err) { next(err); }
+});
+
+export { router as syncRouter };
+
+===== users.ts =====
+import { Router } from 'express';
+import { prisma } from '../utils/prisma.js';
+import { AppError } from '../middleware/errorHandler.js';
+import { AuthenticatedRequest } from '../types/index.js';
+import { hashPassword } from '../utils/helpers.js';
+import { z } from 'zod';
+
+const router = Router();
+
+const createUserSchema = z.object({
+  email: z.string().email(),
+  username: z.string().min(3),
+  password: z.string().min(8),
+  firstName: z.string().min(1),
+  lastName: z.string().min(1),
+  role: z.enum(['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF']).default('CASHIER'),
+  phone: z.string().optional(),
+  status: z.enum(['ACTIVE', 'DISABLED', 'INVITED']).default('ACTIVE'),
+});
+
+router.get('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { search, role, status, page = '1', limit = '50' } = req.query;
+    const where: Record<string, unknown> = {};
+    if (search) {
+      where.OR = [
+        { email: { contains: search, mode: 'insensitive' } },
+        { username: { contains: search, mode: 'insensitive' } },
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+      ];
+    }
+    if (role) where.role = role;
+    if (status) where.status = status;
+    const p = parseInt(page as string) || 1;
+    const l = parseInt(limit as string) || 50;
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, lastLogin: true, createdAt: true },
+        orderBy: { createdAt: 'desc' },
+        skip: (p - 1) * l,
+        take: l,
+      }),
+      prisma.user.count({ where }),
+    ]);
+    res.json({ success: true, data: users, total, page: p, pageSize: l, totalPages: Math.ceil(total / l) });
+  } catch (err) { next(err); }
+});
+
+router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const u = await prisma.user.findUnique({
+      where: { id: req.params.id },
+      select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, lastLogin: true, createdAt: true, _count: { select: { sessions: true, devices: true } },
+    });
+    if (!u) throw new AppError('Not found', 404);
+    res.json({ success: true, data: u });
+  } catch (err) { next(err); }
+});
+
+router.post('/', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user!.role !== 'ADMIN') throw new AppError('Admin only', 403);
+    const d = createUserSchema.parse(req.body);
+    const existing = await prisma.user.findFirst({ where: { OR: [{ email: d.email }, { username: d.username }] } });
+    if (existing) throw new AppError('Email or username exists', 409);
+    const hash = await hashPassword(d.password);
+    const u = await prisma.user.create({ data: { email: d.email, username: d.username, passwordHash: hash, firstName: d.firstName, lastName: d.lastName, role: d.role, status: d.status, phone: d.phone } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_USER', entity: 'user', entityId: u.id, details: { email: u.email, role: u.role } } });
+    res.status(201).json({ success: true, data: { id: u.id, email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: u.status, createdAt: u.createdAt } });
+  } catch (err) { next(err); }
+});
+
+router.put('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const d = createUserSchema.partial().parse(req.body);
+    const existing = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!existing) throw new AppError('Not found', 404);
+    if (d.email && d.email !== existing.email && await prisma.user.findUnique({ where: { email: d.email } })) throw new AppError('Email exists', 409);
+    if (d.username && d.username !== existing.username && await prisma.user.findUnique({ where: { username: d.username } })) throw new AppError('Username exists', 409);
+    const u = await prisma.user.update({
+      where: { id: req.params.id },
+      data: {
+        ...(d.email && { email: d.email }),
+        ...(d.username && { username: d.username }),
+        ...(d.firstName && { firstName: d.firstName }),
+        ...(d.lastName && { lastName: d.lastName }),
+        ...(d.role && { role: d.role }),
+        ...(d.status && { status: d.status }),
+        ...(d.phone !== undefined && { phone: d.phone }),
+      },
+    });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_USER', entity: 'user', entityId: u.id, details: { changes: d } } });
+    res.json({ success: true, data: { id: u.id, email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: u.status, phone: u.phone, updatedAt: u.updatedAt } });
+  } catch (err) { next(err); }
+});
+
+router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user!.role !== 'ADMIN') throw new AppError('Admin only', 403);
+    if (req.params.id === req.user!.id) throw new AppError('Cannot disable yourself', 400);
+    const u = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!u) throw new AppError('Not found', 404);
+    await prisma.user.update({ where: { id: req.params.id }, data: { status: 'DISABLED' } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'DISABLE_USER', entity: 'user', entityId: req.params.id, details: { email: u.email } } });
+    res.json({ success: true, message: 'User disabled' });
+  } catch (err) { next(err); }
+});
+
+export { router as userRouter };
