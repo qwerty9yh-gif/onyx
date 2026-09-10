@@ -251,14 +251,14 @@ export const SalesPage: React.FC = () => {
         <div className="mt-5 grid grid-cols-2 gap-2">
           {(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
             <button type="button" key={method} onClick={() => setPaymentMethod(method)}
-              className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'bg-sky-600 text-white shadow-lg shadow-sky-200' : 'bg-slate-100 text-slate-600'}`}>
+              className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-red-50 text-brand-700'}`}>
               {method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}
               {method}
             </button>
           ))}
         </div>
         <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)}
-          placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-slate-100 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-sky-300" />
+          placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-red-50 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-red-300" />
         <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className={change < 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(change)}</span></div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total}
@@ -281,7 +281,7 @@ export const SalesPage: React.FC = () => {
             <h2 id="print-receipt-title" className="text-xl font-bold text-slate-900">Print Receipt?</h2>
             <p className="mt-2 text-sm text-slate-500">Payment saved for {printPrompt.receiptNumber}.</p>
             <div className="mt-6 grid grid-cols-2 gap-3">
-              <Button className="rounded-2xl bg-sky-600 hover:bg-sky-700" onClick={() => { printReceipt(printPrompt); setPrintPrompt(null); }}><Printer className="mr-2" size={18} />Print Receipt</Button>
+              <Button className="rounded-2xl onyx-brand-gradient hover:brightness-105" onClick={() => { printReceipt(printPrompt); setPrintPrompt(null); }}><Printer className="mr-2" size={18} />Print Receipt</Button>
               <Button variant="outline" className="rounded-2xl" onClick={() => setPrintPrompt(null)}>Not now</Button>
               <Button variant="outline" className="col-span-2 rounded-2xl" disabled={!receiptViewId} onClick={() => { if (receiptViewId) window.location.assign(`/sales/${receiptViewId}/receipt`); }}>View Receipt</Button>
             </div>
