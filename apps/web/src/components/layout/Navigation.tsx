@@ -39,7 +39,6 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/sales', icon: <ShoppingCart size={18} />, label: 'Sales' },
   { to: '/transactions', icon: <Receipt size={18} />, label: 'Transactions' },
   { to: '/incoming', icon: <Truck size={18} />, label: 'Incoming' },
-  { to: '/customers', icon: <Users size={18} />, label: 'Customers', roles: ['ADMIN', 'MANAGER', 'CASHIER'] },
   { to: '/products', icon: <Package size={18} />, label: 'Products', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/purchases', icon: <ShoppingBasket size={18} />, label: 'Purchases', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/inventory', icon: <Boxes size={18} />, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },

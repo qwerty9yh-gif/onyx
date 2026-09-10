@@ -40,7 +40,6 @@ export const Layout: React.FC = () => {
           <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
           <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>
-          <NavLink to="/customers"><Users size={20} /><span>Customers</span></NavLink>
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
         </nav>}
     </div>

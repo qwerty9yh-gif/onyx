@@ -35,7 +35,7 @@ const settingsNavItems: SettingsNavItem[] = [
   { to: '/purchases', icon: ShoppingBasket, label: 'Purchases', description: 'Manage supplier purchases and orders', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/inventory', icon: Package, label: 'Inventory', description: 'Track stock levels and inventory movements', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/incoming', icon: Truck, label: 'Incoming Goods', description: 'Record and manage incoming stock deliveries', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
-  { to: '/customers', icon: Users, label: 'Customers', description: 'Manage customer records and details', roles: ['ADMIN', 'MANAGER'] },
+  { to: '/customers', icon: Users, label: 'Customers', description: 'Manage customer records and details' },
   { to: '/suppliers', icon: ShoppingBasket, label: 'Suppliers', description: 'Manage supplier information and contacts', roles: ['ADMIN', 'MANAGER'] },
   { to: '/categories', icon: FileText, label: 'Categories', description: 'Organize products into categories', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Generate and view business reports', roles: ['ADMIN'] },
