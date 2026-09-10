@@ -40,3 +40,7 @@ services:
         value: https://smsc.hubtel.com/v1
       - key: SMS_ENABLED
         value: "false"
+      - key: DATABASE_RESET_ENABLED
+        value: "false"
+      - key: DATABASE_RESET_TOKEN
+        sync: false

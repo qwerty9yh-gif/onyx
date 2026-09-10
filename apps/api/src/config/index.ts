@@ -16,5 +16,7 @@ export const config = {
   redisUrl: process.env.REDIS_URL,
   printerApiUrl: process.env.PRINTER_API_URL,
   syncInterval: parseInt(process.env.SYNC_INTERVAL || '30', 10),
+  databaseResetEnabled: process.env.DATABASE_RESET_ENABLED === 'true',
+  databaseResetToken: process.env.DATABASE_RESET_TOKEN || '',
 };
 

@@ -19,6 +19,7 @@ import { analyticsRouter } from './routes/analytics.js';
 import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
 import { healthRouter } from './routes/health.js';
+import { maintenanceRouter } from './routes/maintenance.js';
 import { prisma } from './utils/prisma.js';
 
 const app = express();
@@ -62,6 +63,7 @@ app.get('/', (_req, res) => {
 });
 app.use('/api/auth', authRouter);
 app.use('/api/health', healthRouter);
+app.use('/api/maintenance', maintenanceRouter);
 // Protected routes
 app.use('/api/users', authenticate, requireRole('ADMIN'), userRouter);
 app.use('/api/products', authenticate, productRouter);
