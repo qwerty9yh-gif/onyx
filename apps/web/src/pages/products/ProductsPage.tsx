@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Modal } from '../../components/ui/Modal';
 import { Button } from '../../components/ui/Button';
 import { Plus, Edit, Trash2, Package, Eye } from 'lucide-react';
+import { money } from '../../lib/helpers';
 
 export const ProductsPage: React.FC = () => {
   const [searchParams] = useSearchParams();
@@ -64,7 +65,7 @@ export const ProductsPage: React.FC = () => {
     {
       key: 'price',
       header: 'Price',
-      render: (row: Product) => `$${row.sellingPrice.toFixed(2)}`,
+      render: (row: Product) => money(row.sellingPrice),
     },
     {
       key: 'stock',

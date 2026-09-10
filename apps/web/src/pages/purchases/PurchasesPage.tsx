@@ -8,6 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Modal } from '../../components/ui/Modal';
 import type { Purchase } from '../../lib/types';
+import { money } from '../../lib/helpers';
 
 const statusVariant = (status: Purchase['status']): 'default' | 'success' | 'warning' | 'danger' => {
   switch (status) {
@@ -51,7 +52,7 @@ export const PurchasesPage: React.FC = () => {
     { key: 'orderNumber', header: 'Order #', render: (row: Purchase) => <span className="font-medium">{row.orderNumber || row.id.slice(0, 8)}</span> },
     { key: 'supplier', header: 'Supplier', render: (row: Purchase) => row.supplier?.name || '—' },
     { key: 'items', header: 'Items', render: (row: Purchase) => `${row.items?.length ?? 0} items` },
-    { key: 'total', header: 'Total', render: (row: Purchase) => `$${row.total.toFixed(2)}` },
+    { key: 'total', header: 'Total', render: (row: Purchase) => money(row.total) },
     { key: 'status', header: 'Status', render: (row: Purchase) => <Badge variant={statusVariant(row.status)}>{row.status}</Badge> },
     {
       key: 'actions',

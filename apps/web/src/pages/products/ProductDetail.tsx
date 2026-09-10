@@ -6,6 +6,7 @@ import { Product, InventoryMovement } from '../../lib/types';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { ArrowLeft, Edit, Package, History } from 'lucide-react';
+import { money } from '../../lib/helpers';
 
 export const ProductDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -53,8 +54,8 @@ export const ProductDetail: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6">
-          <div><p className="text-xs text-gray-500">Cost Price</p><p className="font-medium">${product.costPrice.toFixed(2)}</p></div>
-          <div><p className="text-xs text-gray-500">Selling Price</p><p className="font-medium">${product.sellingPrice.toFixed(2)}</p></div>
+          <div><p className="text-xs text-gray-500">Cost Price</p><p className="font-medium">{money(product.costPrice)}</p></div>
+          <div><p className="text-xs text-gray-500">Selling Price</p><p className="font-medium">{money(product.sellingPrice)}</p></div>
           <div><p className="text-xs text-gray-500">Stock</p><p className="font-medium">{product.stockQuantity}</p></div>
           <div><p className="text-xs text-gray-500">Min Stock</p><p className="font-medium">{product.minimumStock}</p></div>
         </div>

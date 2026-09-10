@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Plus, Trash2, Search } from 'lucide-react';
 import { api, handleApiError } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
+import { money } from '../../lib/helpers';
 import { Input } from '../../components/ui/Input';
 import type { Product, Supplier, Purchase } from '../../lib/types';
 
@@ -208,7 +209,7 @@ const PurchaseItemsTable: React.FC<ItemsTableProps> = ({ items, subtotal, onUpda
                   className="w-24 px-2 py-1 border rounded text-center"
                 />
               </td>
-              <td className="px-4 py-2 text-right font-medium">${(it.quantity * it.unitPrice).toFixed(2)}</td>
+              <td className="px-4 py-2 text-right font-medium">{money(it.quantity * it.unitPrice)}</td>
               <td className="px-4 py-2 text-right">
                 <button type="button" onClick={() => onRemove(it.productId)} className="p-1 text-red-600 hover:text-red-800">
                   <Trash2 size={16} />
@@ -222,7 +223,7 @@ const PurchaseItemsTable: React.FC<ItemsTableProps> = ({ items, subtotal, onUpda
         <tfoot className="bg-gray-50 border-t">
           <tr>
             <td colSpan={3} className="px-4 py-2 text-right font-medium">Subtotal</td>
-            <td className="px-4 py-2 text-right font-bold">${subtotal.toFixed(2)}</td>
+            <td className="px-4 py-2 text-right font-bold">{money(subtotal)}</td>
             <td></td>
           </tr>
         </tfoot>
