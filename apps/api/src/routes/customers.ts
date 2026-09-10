@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { generateLocalId } from '../utils/helpers.js';
+import { sendSms } from '../services/sms.js';
 
 const router = Router();
 
@@ -116,15 +117,50 @@ router.get('/barcode/:barcode', async (req: AuthenticatedRequest, res, next) => 
   } catch (err) { next(err); }
 });
 
-// POST /api/customers/broadcast - Send notification to all customers (future Hubtel SMS integration)
+// POST /api/customers/broadcast - Send an SMS announcement to all customers with phones
 router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
   try {
     if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { title, message } = req.body;
     if (!message) throw new AppError('Message required', 400);
     const customers = await prisma.customer.findMany({ where: { phone: { not: null } }, select: { id: true, name: true, phone: true } });
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'BROADCAST_NOTIFICATION', entity: 'customer', entityId: null, details: { title: title || 'Announcement', message, recipientCount: customers.length } } });
-    res.json({ success: true, data: { sent: customers.length, customers: customers.map((c) => ({ id: c.id, name: c.name, phone: c.phone })) }, message: `Notification queued for ${customers.length} customers (Hubtel SMS integration pending)` });
+    const smsText = `${title ? `${title}\n` : ''}${message}`;
+    const results = await Promise.all(customers.map((c) => sendSms(c.phone!, smsText)));
+    const sent = results.filter((r) => r.success).length;
+    const failed = results.length - sent;
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id, action: 'BROADCAST_NOTIFICATION', entity: 'customer', entityId: null,
+        details: { title: title || 'Announcement', message, recipientCount: customers.length, sent, failed }
+      }
+    });
+    res.json({
+      success: true,
+      data: { sent, failed, total: customers.length },
+      message: `Notification sent to ${sent} customer${sent === 1 ? '' : 's'}${failed ? ` (${failed} failed)` : ''}`,
+    });
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers/:id/message - Send a single SMS to one customer
+router.post('/:id/message', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { title, message } = req.body;
+    if (!message) throw new AppError('Message required', 400);
+    const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });
+    if (!customer) throw new AppError('Not found', 404);
+    if (!customer.phone) throw new AppError('Customer has no phone number', 400);
+    const smsText = `${title ? `${title}\n` : ''}${message}`;
+    const result = await sendSms(customer.phone, smsText);
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id, action: result.success ? 'SMS_SENT' : 'SMS_FAILED', entity: 'customer', entityId: customer.id,
+        details: { title: title || 'Message', phone: customer.phone, message, success: result.success, messageId: result.messageId, error: result.error }
+      }
+    });
+    if (!result.success) throw new AppError(result.error || 'SMS send failed', 500);
+    res.json({ success: true, data: { messageId: result.messageId, phone: customer.phone }, message: 'Message sent' });
   } catch (err) { next(err); }
 });
 

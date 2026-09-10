@@ -68,7 +68,7 @@ app.use('/api/products', authenticate, productRouter);
 app.use('/api/categories', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), categoryRouter);
 app.use('/api/sales', authenticate, saleRouter);
 app.use('/api/inventory', authenticate, inventoryRouter);
-app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER'), customerRouter);
+app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER', 'CASHIER'), customerRouter);
 app.use('/api/suppliers', authenticate, supplierRouter);
 app.use('/api/purchases', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), purchaseRouter);
 app.use('/api/reports', authenticate, requireRole('ADMIN'), reportRouter);

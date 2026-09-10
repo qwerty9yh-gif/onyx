@@ -5,9 +5,9 @@ import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Contact } from 'lucide-react';
-import { api, handleApiError } from '../../lib/api';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
+import { api, handleApiError } from '../apps/web/src/lib/api';
+import { Button } from '../apps/web/src/components/ui/Button';
+import { Input } from '../apps/web/src/components/ui/Input';
 
 const customerSchema = z.object({
   name: z.string().min(1, 'Name is required'),

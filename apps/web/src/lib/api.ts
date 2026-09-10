@@ -54,3 +54,25 @@ export function handleApiError(error: unknown): string {
   }
   return 'An unexpected error occurred';
 }
+
+
+export interface SmsSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
+}
+
+export async function sendSmsInvoice(saleId: string, phone?: string): Promise<SmsSendResult> {
+  const res = await api.post(`/sales/${saleId}/sms-invoice`, { phone: phone || undefined });
+  return res.data.data as SmsSendResult;
+}
+
+export async function broadcastCustomerSms(title: string, message: string): Promise<{ sent: number; failed: number; total: number }> {
+  const res = await api.post('/customers/broadcast', { title, message });
+  return res.data.data as { sent: number; failed: number; total: number };
+}
+
+export async function messageCustomer(customerId: string, title: string, message: string): Promise<SmsSendResult> {
+  const res = await api.post(`/customers/${customerId}/message`, { title, message });
+  return res.data.data as SmsSendResult;
+}

@@ -2,9 +2,9 @@ import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { BarChart3, Boxes, LayoutDashboard, Package, Receipt, Settings, ShoppingBasket, ShoppingCart, Truck, UserCog, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
-import { api } from '../../lib/api';
-import { getUser } from '../../lib/auth';
-import type { UserRole } from '../../lib/types';
+import { api } from '../apps/web/src/lib/api';
+import { getUser } from '../apps/web/src/lib/auth';
+import type { UserRole } from '../apps/web/src/lib/types';
 
 interface NavItemProps {
   to: string;

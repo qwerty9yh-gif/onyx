@@ -2,14 +2,14 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Edit, Megaphone, MessageSquare, Plus, Send } from 'lucide-react';
-import { api, broadcastCustomerSms, messageCustomer } from '../../lib/api';
-import { DataTable } from '../../components/ui/DataTable';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { Input } from '../../components/ui/Input';
-import { Modal } from '../../components/ui/Modal';
-import { money } from '../../lib/helpers';
-import { handleApiError } from '../../lib/api';
+import { api, broadcastCustomerSms, messageCustomer } from '../apps/web/src/lib/api';
+import { DataTable } from '../apps/web/src/components/ui/DataTable';
+import { Badge } from '../apps/web/src/components/ui/Badge';
+import { Button } from '../apps/web/src/components/ui/Button';
+import { Input } from '../apps/web/src/components/ui/Input';
+import { Modal } from '../apps/web/src/components/ui/Modal';
+import { money } from '../apps/web/src/lib/helpers';
+import { handleApiError } from '../apps/web/src/lib/api';
 
 interface CustomerRow {
   id: string;

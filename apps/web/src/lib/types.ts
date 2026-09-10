@@ -70,7 +70,6 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
-  phoneLabel?: string;
   address?: string;
   barcode?: string;
   notes?: string;
@@ -123,6 +122,9 @@ export interface Sale {
   receiptNumber: string;
   cashierId: string;
   customerId?: string;
+  customerPhone?: string | null;
+  waiterId?: string;
+  waiter?: { id: string; firstName: string; lastName: string } | null;
   status: TransactionStatus;
   syncStatus: string;
   subtotal: number;
@@ -147,8 +149,7 @@ export interface Sale {
   items: SaleItem[];
   payments: Payment[];
   refund?: Refund;
-  sendInvoiceBySms?: (phone?: string) => Promise<{ success: boolean; messageId?: string; error?: string }>;
-}
+  }
 
 export interface PurchaseItem {
   id: string;
@@ -232,4 +233,10 @@ export interface DashboardStats {
   }>;
   topCategories: Array<Record<string, unknown>>;
   recentActivity?: AuditLogEntry[];
+}
+
+export interface SmsSendResult {
+  success: boolean;
+  messageId?: string;
+  error?: string;
 }

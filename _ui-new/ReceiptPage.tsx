@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Phone, Printer, Send, UserRound } from 'lucide-react';
-import { api, sendSmsInvoice } from '../../lib/api';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import type { Sale, SaleItem } from '../../lib/types';
-import { money } from '../../lib/helpers';
-import { printReceipt, type ReceiptData } from '../../lib/printer';
+import { api, sendSmsInvoice } from '../apps/web/src/lib/api';
+import { Badge } from '../apps/web/src/components/ui/Badge';
+import { Button } from '../apps/web/src/components/ui/Button';
+import type { Sale, SaleItem } from '../apps/web/src/lib/types';
+import { money } from '../apps/web/src/lib/helpers';
+import { printReceipt, type ReceiptData } from '../apps/web/src/lib/printer';
 
 export const ReceiptPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

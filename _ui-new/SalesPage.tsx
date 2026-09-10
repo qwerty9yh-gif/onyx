@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, CheckCircle, CreditCard, FileText, Minus, Phone, Plus, Printer, Search, Send, ShoppingCart, Trash2, UserRound, Wifi, WifiOff } from 'lucide-react';
-import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
-import { money } from '../../lib/helpers';
-import type { PaymentMethod, Product, User } from '../../lib/types';
-import { Button } from '../../components/ui/Button';
-import { clearCart, loadCart, loadProducts, loadQueue, markQueuedSaleFailed, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
-import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
+import { api, handleApiError, sendSmsInvoice } from '../apps/web/src/lib/api';
+import { money } from '../apps/web/src/lib/helpers';
+import type { PaymentMethod, Product, User } from '../apps/web/src/lib/types';
+import { Button } from '../apps/web/src/components/ui/Button';
+import { clearCart, loadCart, loadProducts, loadQueue, markQueuedSaleFailed, queueSale, removeQueuedSale, saveCart, saveProducts } from '../apps/web/src/lib/offline';
+import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../apps/web/src/lib/printer';
 
 interface CartItem {
   productId: string;

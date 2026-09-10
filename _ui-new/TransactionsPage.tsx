@@ -1,12 +1,12 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Printer, Receipt, Search, Send, UserRound, WalletCards, X } from 'lucide-react';
-import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
-import { Badge } from '../../components/ui/Badge';
-import { Button } from '../../components/ui/Button';
-import { printInvoice, type InvoiceData } from '../../lib/printer';
-import type { Sale } from '../../lib/types';
-import { money } from '../../lib/helpers';
+import { api, handleApiError, sendSmsInvoice } from '../apps/web/src/lib/api';
+import { Badge } from '../apps/web/src/components/ui/Badge';
+import { Button } from '../apps/web/src/components/ui/Button';
+import { printInvoice, type InvoiceData } from '../apps/web/src/lib/printer';
+import type { Sale } from '../apps/web/src/lib/types';
+import { money } from '../apps/web/src/lib/helpers';
 
 type Tab = 'paid' | 'unpaid' | 'closed';
 
