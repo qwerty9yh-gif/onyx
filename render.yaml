@@ -2,7 +2,7 @@ services:
   - type: web
     name: onyx-api
     runtime: node
-    buildCommand: npm ci --include=dev && npm run db:generate && npm run build:api
+    buildCommand: npm ci --include=dev && npx prisma db push --schema prisma/schema.prisma && npm run db:generate && npm run build:api
     startCommand: npm run start --workspace=apps/api
     healthCheckPath: /api/health
     envVars:
@@ -28,3 +28,11 @@ services:
         sync: false
       - key: SYNC_INTERVAL
         value: 30
+      - key: HUBTEL_API_KEY
+        sync: false
+      - key: HUBTEL_SENDER_ID
+        sync: false
+      - key: HUBTEL_BASE_URL
+        value: https://api.hubtel.com/v1
+      - key: SMS_ENABLED
+        value: "false"
