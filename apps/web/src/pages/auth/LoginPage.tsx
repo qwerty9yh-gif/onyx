@@ -1,9 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ArrowLeft, Lock, ShieldCheck, UserRound } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { api, handleApiError } from '../../lib/api';
-import { getToken, loginByCard } from '../../lib/auth';
+import { getToken, getUser, loginByCard } from '../../lib/auth';
 
 interface LoginUser {
   id: string;
@@ -64,6 +64,10 @@ export const LoginPage: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const from = (location.state as { from?: { pathname: string } } | undefined)?.from?.pathname;
+
+  useEffect(() => {
+    if (getToken() && getUser()) navigate(from || '/dashboard', { replace: true });
+  }, [from, navigate]);
 
   const { data: users = [], isLoading, isError } = useQuery<LoginUser[]>({
     queryKey: ['login-users'],
@@ -143,7 +147,7 @@ export const LoginPage: React.FC = () => {
   );
 return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
-      <div className="w-full max-w-5xl">
+      <div className="w-full max-w-4xl">
         <div className="flex flex-col items-center mb-8 animate-slide-up">
           <img src={`${base}icons/icon-144.png`} alt="ONYX POS icon" className="w-20 h-20 rounded-3xl shadow-glow-red mx-auto" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
           <h1 className="mt-3 text-4xl font-extrabold tracking-tight onyx-text-gradient">ONYX POS</h1>
@@ -175,7 +179,7 @@ return (
         )}
 
         {!isLoading && users.length > 0 && (
-          <div className="grid gap-5 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4">
+          <div className="grid gap-5 sm:grid-cols-2">
             {users.map(renderCard)}
           </div>
         )}

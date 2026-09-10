@@ -19,7 +19,7 @@ interface CartItem {
 
 // ── Business identity used on invoices & receipts ──────────────────────────
 export const BUSINESS = {
-  name: 'ONYX POS',
+  name: 'ONYX LOUNGE / PUB',
   location: 'Malam Bawi',
   phone: '0555554167',
 };
@@ -113,7 +113,7 @@ export const SalesPage: React.FC = () => {
   };
 
   const buildReceiptData = (receiptNumber: string, markPaid: boolean): ReceiptData => ({
-    storeName: 'ONYX POS',
+    storeName: BUSINESS.name,
     receiptNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),
@@ -128,7 +128,7 @@ export const SalesPage: React.FC = () => {
   });
 
   const buildInvoiceData = (invoiceNumber: string): InvoiceData => ({
-    storeName: 'ONYX POS',
+    storeName: BUSINESS.name,
     invoiceNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),

@@ -29,11 +29,11 @@ export const Layout: React.FC = () => {
           <Outlet />
         </main>
       </div>
-      <nav className="cashier-dock" aria-label="Main navigation">
+        <nav className="cashier-dock" aria-label="Main navigation">
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
           <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
-          <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>
+          {['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(me?.role || '') && <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>}
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
         </nav>
     </div>

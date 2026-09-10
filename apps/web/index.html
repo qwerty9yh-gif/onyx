@@ -10,16 +10,15 @@
 	<meta name="mobile-web-app-capable" content="yes" />
 	<meta name="application-name" content="ONYX POS" />
 	<meta name="msapplication-TileColor" content="#dc2626" />
-	<meta name="msapplication-TileImage" content="/icons/icon-144.png" />
-	<link rel="manifest" href="/manifest.webmanifest" />
-	<link rel="icon" type="image/png" sizes="32x32" href="/favicon.png" />
-	<link rel="icon" type="image/png" sizes="48x48" href="/icons/icon-48.png" />
-	<link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
-	<link rel="icon" type="image/png" sizes="512x512" href="/icons/icon-512.png" />
-	<link rel="apple-touch-icon" sizes="120x120" href="/icons/icon-120.png" />
-	<link rel="apple-touch-icon" sizes="152x152" href="/icons/icon-152.png" />
-	<link rel="apple-touch-icon" sizes="167x167" href="/icons/icon-167.png" />
-	<link rel="apple-touch-icon" sizes="180x180" href="/icons/icon-180.png" />
+	<meta name="msapplication-TileImage" content="%BASE_URL%icons/icon-144.png" />
+	<link rel="manifest" href="%BASE_URL%manifest.webmanifest" />
+	<link rel="icon" type="image/png" sizes="48x48" href="%BASE_URL%icons/icon-48.png" />
+	<link rel="icon" type="image/png" sizes="192x192" href="%BASE_URL%icons/icon-192.png" />
+	<link rel="icon" type="image/png" sizes="512x512" href="%BASE_URL%icons/icon-512.png" />
+	<link rel="apple-touch-icon" sizes="120x120" href="%BASE_URL%icons/icon-120.png" />
+	<link rel="apple-touch-icon" sizes="152x152" href="%BASE_URL%icons/icon-152.png" />
+	<link rel="apple-touch-icon" sizes="167x167" href="%BASE_URL%icons/icon-167.png" />
+	<link rel="apple-touch-icon" sizes="180x180" href="%BASE_URL%icons/icon-180.png" />
 	<title>ONYX POS</title>
 	<style>
 		/* Splash screen: rendered before the app boots, faded out by main.tsx */
@@ -88,7 +87,7 @@
 </head>
 <body>
 	<div id="onyx-splash" role="status" aria-label="Loading ONYX POS">
-		<img src="/icons/icon-512.png" alt="ONYX POS icon" onerror="this.style.display='none'" />
+		<img src="%BASE_URL%icons/icon-512.png" alt="ONYX POS icon" onerror="this.style.display='none'" />
 		<h1>ONYX</h1>
 		<p>POS System</p>
 		<div id="onyx-splash-bar"></div>

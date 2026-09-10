@@ -11,7 +11,7 @@ const isPaid = (sale: Sale) => sale.status === 'COMPLETED';
 
 function invoiceFor(sale: Sale): InvoiceData {
   return {
-    storeName: 'ONYX POS',
+    storeName: 'ONYX LOUNGE / PUB',
     invoiceNumber: sale.receiptNumber,
     cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
     createdAt: new Date(sale.createdAt).toLocaleString(),
@@ -55,7 +55,7 @@ export const TransactionsPage: React.FC = () => {
   const open = (sale: Sale) => { setSelected(sale); setError(''); };
   const print = (sale: Sale) => { printInvoice(invoiceFor(sale)); setSelected(null); };
   const section = (title: string, rows: Sale[], tone: string) => (
-    <section className="space-y-3">
+    <section className="max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto pr-1">
       <div className="flex items-center justify-between"><h2 className="text-xl font-bold text-slate-800">{title}</h2><span className={`rounded-full px-3 py-1 text-xs font-bold ${tone}`}>{rows.length}</span></div>
       {rows.length ? rows.map((sale) => (
         <button type="button" key={sale.id} onClick={() => open(sale)} className="w-full rounded-3xl border border-white/80 bg-white/80 p-4 text-left shadow-lg shadow-slate-200/50 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-xl">

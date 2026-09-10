@@ -19,7 +19,7 @@ export const ReceiptPage: React.FC = () => {
 
   const print = () => {
     const receipt: ReceiptData = {
-      storeName: 'ONYX POS',
+      storeName: 'ONYX LOUNGE / PUB',
       receiptNumber: sale.receiptNumber,
       cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
       createdAt: new Date(sale.createdAt).toLocaleString(),

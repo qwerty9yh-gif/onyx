@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Download, Edit3, LogOut, Plus, Save, Search, Settings2, Shield, Store, Trash2, Upload, type LucideIcon } from 'lucide-react';
+import { Download, Edit3, LogOut, Plus, RefreshCw, Save, Search, Settings2, Shield, Store, Trash2, Upload, type LucideIcon } from 'lucide-react';
 import { api, handleApiError } from '../../lib/api';
 import { logout } from '../../lib/auth';
 import type { Business, Category, Product } from '../../lib/types';
@@ -21,6 +21,7 @@ const settingsPanels: SettingsPanel[] = [
   { icon: Settings2, title: 'Theme', text: 'Red and white application appearance' },
   { icon: Settings2, title: 'Printer Settings', text: 'Receipt printer and diagnostics' },
   { icon: Download, title: 'Backup', text: 'Export and restore local product data' },
+  { icon: RefreshCw, title: 'Daily Reset', text: 'Archive pending transactions and reset the active shift' },
   { icon: LogOut, title: 'Logout', text: 'End the current session' },
 ];
 
@@ -47,6 +48,7 @@ export const SettingsPage: React.FC = () => {
   const saveSettings = useMutation({ mutationFn: () => api.put('/settings', { business: form }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }) });
   const updateProduct = useMutation({ mutationFn: ({ id, data }: { id: string; data: ProductDraft }) => api.put(`/products/${id}`, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['settings-products'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); setEditing(null); } });
   const deleteProduct = useMutation({ mutationFn: (id: string) => api.delete(`/products/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings-products'] }) });
+  const dailyReset = useMutation({ mutationFn: () => api.post('/sales/daily-reset'), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['transactions'] }) });
 
   const visibleProducts = useMemo(() => products.filter((product) => (!search || `${product.name} ${product.sku}`.toLowerCase().includes(search.toLowerCase())) && (!categoryId || product.categoryId === categoryId)).sort((a, b) => sort === 'price' ? a.sellingPrice - b.sellingPrice : sort === 'category' ? (a.category?.name || '').localeCompare(b.category?.name || '') : a.name.localeCompare(b.name)), [products, search, categoryId, sort]);
   const setBusiness = (patch: Partial<BusinessForm>) => setForm((current) => ({ ...current, ...patch }));

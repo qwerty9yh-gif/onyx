@@ -2,7 +2,7 @@ import React from 'react';
 import { Routes, Route, Navigate, Outlet, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './lib/api';
-import { getToken } from './lib/auth';
+import { getToken, getUser } from './lib/auth';
 import type { UserRole } from './lib/types';
 import { Layout } from './components/layout/Layout';
 import { LoginPage } from './pages/auth/LoginPage';
@@ -35,9 +35,15 @@ const RequireAuth = () => {
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
-    queryFn: () => {
+    queryFn: async () => {
       console.log('[ONYX AUTH] Fetching /auth/me with token:', !!getToken());
-      return api.get('/auth/me').then((res) => res.data.data);
+      try {
+        return (await api.get('/auth/me')).data.data;
+      } catch (error) {
+        const cachedUser = getUser();
+        if (cachedUser && !navigator.onLine) return cachedUser;
+        throw error;
+      }
     },
     retry: false,
     staleTime: 1000 * 60 * 10,
@@ -66,7 +72,15 @@ const RequireRole: React.FC<{ roles: UserRole[] }> = ({ roles }) => {
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
-    queryFn: () => api.get('/auth/me').then((res) => res.data.data),
+    queryFn: async () => {
+      try {
+        return (await api.get('/auth/me')).data.data;
+      } catch (error) {
+        const cachedUser = getUser();
+        if (cachedUser && !navigator.onLine) return cachedUser;
+        throw error;
+      }
+    },
     retry: false,
     enabled: hasToken,
   });

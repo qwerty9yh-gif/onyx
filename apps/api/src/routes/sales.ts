@@ -13,6 +13,23 @@ interface SaleItemInput {
   discountType: string;
 }
 
+// Archive pending work before resetting the active shift; historical rows remain queryable.
+router.post('/daily-reset', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const pending = await prisma.sale.findMany({ where: { status: 'PENDING' }, select: { id: true, receiptNumber: true, total: true } });
+    const result = await prisma.$transaction(async (tx) => {
+      for (const sale of pending) {
+        await tx.auditLog.create({ data: { userId: req.user!.id, action: 'ARCHIVE_DAILY_TRANSACTION', entity: 'sale', entityId: sale.id, details: { receiptNumber: sale.receiptNumber, total: sale.total } } });
+        await tx.sale.update({ where: { id: sale.id }, data: { status: 'VOIDED', voidedAt: new Date(), notes: 'Archived during daily reset' } });
+      }
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'DAILY_RESET', entity: 'sales', entityId: null, details: { archivedCount: pending.length } } });
+      return pending.length;
+    });
+    res.json({ success: true, data: { archived: result, resetAt: new Date().toISOString() }, message: 'Pending transactions archived and active shift reset' });
+  } catch (err) { next(err); }
+});
+
 // POST /api/sales - Create a new sale
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
