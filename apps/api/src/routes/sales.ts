@@ -181,10 +181,15 @@ router.post('/:id/void', async (req: AuthenticatedRequest, res, next) => {
     if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot void', 400);
-    await prisma.sale.update({ where: { id: req.params.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
-    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
-    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: i.quantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } })));
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role) && s.cashierId !== req.user!.id) throw new AppError('Forbidden', 403);
+    await prisma.$transaction(async (tx) => {
+      await tx.sale.update({ where: { id: s.id }, data: { status: 'VOIDED', voidedAt: new Date() } });
+      for (const item of s.items) {
+        const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
+        await tx.inventoryMovement.create({ data: { productId: item.productId, userId: req.user!.id, type: 'ADJUSTMENT', quantity: item.quantity, previousStock: product.stockQuantity - item.quantity, newStock: product.stockQuantity, referenceId: s.id, notes: `Void ${s.receiptNumber}` } });
+      }
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'VOID_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total } } });
+    });
     res.json({ success: true, message: 'Voided' });
   } catch (err) { next(err); }
 });
@@ -197,28 +202,29 @@ router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
     if (!reason) throw new AppError('Reason required', 400);
     const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot refund', 400);
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role) && s.cashierId !== req.user!.id) throw new AppError('Forbidden', 403);
     if (s.refundId) throw new AppError('Already refunded', 400);
     const refundAmount = amountRefunded || s.total;
     if (refundAmount > s.total) throw new AppError('Refund exceeds total', 400);
-    const refund = await prisma.refund.create({
-      data: {
-        originalSaleId: s.id, cashierId: req.user!.id, reason,
-        subtotal: s.subtotal, discount: s.discount, tax: s.tax,
-        total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,
-        amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()
+    const refund = await prisma.$transaction(async (tx) => {
+      const createdRefund = await tx.refund.create({
+        data: {
+          originalSaleId: s.id, cashierId: req.user!.id, reason,
+          subtotal: s.subtotal, discount: s.discount, tax: s.tax,
+          total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,
+          amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()
+        }
+      });
+      await tx.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: createdRefund.id } });
+      await tx.refundItem.createMany({ data: s.items.map(i => ({ refundId: createdRefund.id, saleItemId: i.id, productId: i.productId, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total })) });
+      await tx.payment.create({ data: { saleId: s.id, method: paymentMethod || s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+      for (const item of s.items) {
+        const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
+        await tx.inventoryMovement.create({ data: { productId: item.productId, userId: req.user!.id, type: 'REFUND', quantity: item.quantity, previousStock: product.stockQuantity - item.quantity, newStock: product.stockQuantity, referenceId: s.id, notes: 'Refund' } });
       }
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
+      return createdRefund;
     });
-    await prisma.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: refund.id } });
-    await prisma.refundItem.createMany({
-      data: s.items.map(i => ({
-        refundId: refund.id, saleItemId: i.id, productId: i.productId, name: i.name,
-        quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total
-      }))
-    });
-    await prisma.payment.create({ data: { saleId: s.id, method: s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
-    await Promise.all(s.items.map(i => prisma.product.update({ where: { id: i.productId }, data: { stockQuantity: { increment: i.quantity } } })));
-    await Promise.all(s.items.map(i => prisma.inventoryMovement.create({ data: { productId: i.productId, userId: req.user!.id, type: 'REFUND', quantity: i.quantity, referenceId: s.id, notes: 'Refund' } })));
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'REFUND_SALE', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, refundAmount, reason } } });
     res.json({ success: true, data: refund, message: 'Refunded' });
   } catch (err) { next(err); }
 });

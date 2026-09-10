@@ -80,9 +80,10 @@ router.get('/inventory-summary', async (req: AuthenticatedRequest, res, next) =>
       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10, gt: 0 } } }),
       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: 0 } }),
       prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { stockQuantity: true } }),
-      prisma.product.aggregate({ where: { status: 'ACTIVE' }, _sum: { costPrice: true } })
+      prisma.product.findMany({ where: { status: 'ACTIVE' }, select: { stockQuantity: true, costPrice: true } })
     ]);
-    res.json({ success: true, data: { totalProducts, activeProducts, lowStock, outOfStock, totalStockValue: totalStockValue._sum.stockQuantity || 0, totalCostValue: totalCostValue._sum.costPrice || 0 } });
+    const totalCost = totalCostValue.reduce((sum, product) => sum + product.stockQuantity * product.costPrice, 0);
+    res.json({ success: true, data: { totalProducts, activeProducts, lowStock, outOfStock, totalStockValue: totalStockValue._sum.stockQuantity || 0, totalCostValue: totalCost } });
   } catch (err) { next(err); }
 });
 

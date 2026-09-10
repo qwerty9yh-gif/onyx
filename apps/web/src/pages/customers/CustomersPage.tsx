@@ -7,6 +7,7 @@ import { DataTable } from '../../components/ui/DataTable';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
+import { money } from '../../lib/helpers';
 
 interface Customer {
     id: string; name: string; email?: string; phone?: string;
@@ -26,7 +27,7 @@ export const CustomersPage: React.FC = () => {
     { key: 'name', header: 'Name', render: (row: Customer) => <div className="font-medium">{row.name}</div> },
     { key: 'email', header: 'Email', render: (row: Customer) => row.email || '—' },
     { key: 'phone', header: 'Phone', render: (row: Customer) => row.phone || '—' },
-    { key: 'total', header: 'Total Spent', render: (row: Customer) => `$${row.totalSpent.toFixed(2)}` },
+    { key: 'total', header: 'Total Spent', render: (row: Customer) => money(row.totalSpent) },
     {
       key: 'actions', header: 'Actions', className: 'text-right',
       render: (row: Customer) => (

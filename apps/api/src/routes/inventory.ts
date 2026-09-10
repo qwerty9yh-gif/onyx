@@ -58,6 +58,7 @@ router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/inventory/receive - Record a simple incoming-goods receipt.
 router.post('/receive', async (req: AuthenticatedRequest, res, next) => {
   try {
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { supplierId, productId, quantity } = req.body;
     const parsedQuantity = Number(quantity);
     if (!supplierId || !productId || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {

@@ -105,6 +105,7 @@ function App() {
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/incoming" element={<IncomingPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="/sales/:id/receipt" element={<ReceiptPage />} />
           <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'INVENTORY_STAFF']} />}>
             <Route path="/products" element={<ProductsPage />} />
@@ -130,7 +131,6 @@ function App() {
           </Route>
           <Route element={<RequireRole roles={['ADMIN']} />}>
             <Route path="/users" element={<UsersPage />} />
-            <Route path="/settings" element={<SettingsPage />} />
           </Route>
         </Route>
       </Route>

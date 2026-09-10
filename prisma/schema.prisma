@@ -157,7 +157,7 @@ model Business {
   email         String   @default("")
   address       String   @default("")
   taxRate       Float    @default(0)
-  currency      String   @default("USD")
+  currency      String   @default("GHS")
   receiptPrefix String   @default("REC")
   logo          String?
   createdAt     DateTime @default(now())
@@ -168,7 +168,7 @@ model Settings {
   id              String   @id @default("default")
   receiptSettings String   @default("{}")
   taxRate         Float    @default(0)
-  currency        String   @default("USD")
+  currency        String   @default("GHS")
   defaultStore    String   @default("main")
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

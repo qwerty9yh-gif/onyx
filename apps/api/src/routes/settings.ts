@@ -14,7 +14,7 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
       prisma.settings.findFirst()
     ]);
     const receiptSettings = settings?.receiptSettings ? JSON.parse(settings.receiptSettings) : null;
-    res.json({ success: true, data: { business, receiptSettings, taxRate: settings?.taxRate, currency: settings?.currency || 'USD' } });
+    res.json({ success: true, data: { business, receiptSettings, taxRate: settings?.taxRate, currency: settings?.currency || 'GHS' } });
   } catch (err) { next(err); }
 });
 
@@ -45,7 +45,7 @@ router.put('/', async (req: AuthenticatedRequest, res, next) => {
           email: business?.email || '',
           address: business?.address || '',
           taxRate: business?.taxRate || 0,
-          currency: business?.currency || 'USD',
+          currency: business?.currency || 'GHS',
           receiptPrefix: business?.receiptPrefix || 'REC',
           logo: business?.logo || null,
         }
@@ -62,7 +62,7 @@ router.put('/', async (req: AuthenticatedRequest, res, next) => {
           id: 'default',
           receiptSettings: receiptSettings ? JSON.stringify(receiptSettings) : JSON.stringify({ printer: 'default', footer: '', showBarcode: true }),
           taxRate: taxRate || 0,
-          currency: currency || 'USD',
+          currency: currency || 'GHS',
           defaultStore: defaultStore || 'main',
         }
       }),
@@ -90,11 +90,13 @@ router.post('/trigger-sync', async (req: AuthenticatedRequest, res, next) => {
     const pending = await prisma.syncOperation.findMany({ where: { status: 'PENDING' }, take: 100, orderBy: { createdAt: 'asc' } });
     const processed = await Promise.all(pending.map(async (op) => {
       try {
-        // Sync operations would be processed here
-        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'COMPLETED', completedAt: new Date() } });
+        if (op.entity !== 'sale' || !op.serverId || !(await prisma.sale.findUnique({ where: { id: op.serverId }, select: { id: true } }))) {
+          throw new AppError('Sync operation cannot be reconciled', 409);
+        }
+        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'COMPLETED', completedAt: new Date(), updatedAt: new Date() } });
         return { id: op.id, status: 'completed' };
-      } catch {
-        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'FAILED' } });
+      } catch (error) {
+        await prisma.syncOperation.update({ where: { id: op.id }, data: { status: 'FAILED', updatedAt: new Date() } });
         return { id: op.id, status: 'failed' };
       }
     }));

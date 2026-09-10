@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Download } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
+import { money } from '../../lib/helpers';
 
 type TabKey = 'sales' | 'inventory' | 'products' | 'cashiers' | 'customers';
 
@@ -20,7 +21,7 @@ interface MetaBlock {
 
 function MetaValue({ value }: { value: unknown }) {
   if (value === null || value === undefined) return <span>—</span>;
-  if (typeof value === 'number') return <span>${value.toFixed(2)}</span>;
+  if (typeof value === 'number') return <span>{money(value)}</span>;
   if (typeof value === 'object') return <span className="text-gray-400">[data]</span>;
   return <span>{String(value)}</span>;
 }

@@ -14,17 +14,15 @@ export const Layout: React.FC = () => {
     queryFn: () => api.get('/auth/me').then((res) => res.data.data),
     retry: false,
   });
-  const isAdmin = me?.role === 'ADMIN';
-
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900">
       <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      {isAdmin && <div className="hidden md:flex md:flex-col md:w-64 md:bg-gradient-to-b md:from-slate-900 md:to-slate-800 md:text-white md:shadow-xl">
+      <div className="hidden md:flex md:flex-col md:w-64 md:bg-gradient-to-b md:from-slate-900 md:to-slate-800 md:text-white md:shadow-xl">
         <div className="flex items-center justify-center h-16 border-b border-white/10 bg-brand-700">
           <h1 className="text-lg font-extrabold tracking-wider text-white">ONYX POS</h1>
         </div>
         <Navigation />
-      </div>}
+      </div>
       <div className="flex-1 flex flex-col overflow-hidden">
         <TopBar onMenuClick={() => setSidebarOpen(true)} />
         <main className="flex-1 overflow-y-auto p-4 pb-24 md:p-6">

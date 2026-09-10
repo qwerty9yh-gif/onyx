@@ -5,7 +5,7 @@ import { api, handleApiError } from '../../lib/api';
 import { money } from '../../lib/helpers';
 import type { PaymentMethod, Product, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
-import { clearCart, loadCart, loadProducts, loadQueue, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
+import { clearCart, loadCart, loadProducts, loadQueue, markQueuedSaleFailed, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
 import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 
 interface CartItem {
@@ -19,7 +19,7 @@ interface CartItem {
 
 // ── Business identity used on invoices & receipts ──────────────────────────
 export const BUSINESS = {
-  name: 'ONYX LOUNGE / PUB',
+  name: 'ONYX POS',
   location: 'Malam Bawi',
   phone: '0555554167',
 };
@@ -31,6 +31,8 @@ export const SalesPage: React.FC = () => {
   const [amountReceived, setAmountReceived] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState('');
+  const [queuedCount, setQueuedCount] = useState(() => loadQueue().length);
+  const [syncError, setSyncError] = useState('');
   const [printPrompt, setPrintPrompt] = useState<ReceiptData | null>(null);
   const cartRef = useRef<HTMLElement>(null);
   const queryClient = useQueryClient();
@@ -57,7 +59,7 @@ export const SalesPage: React.FC = () => {
     queryKey: ['products-search', search],
     queryFn: async () => {
       if (!online) return loadProducts<Product>().filter((product) => !search || product.name.toLowerCase().includes(search.toLowerCase()) || product.sku.toLowerCase().includes(search.toLowerCase()));
-      const result = await api.get('/products', { params: { search: search || undefined, status: 'ACTIVE', limit: 40 } });
+      const result = await api.get('/products', { params: { search: search || undefined, status: 'ACTIVE', limit: search ? 40 : 200 } });
       const data = result.data.data as Product[];
       saveProducts(data);
       return data;
@@ -72,10 +74,13 @@ export const SalesPage: React.FC = () => {
         try {
           await api.post('/sales', sale.payload);
           removeQueuedSale(sale.id);
-        } catch {
+        } catch (error) {
+          markQueuedSaleFailed(sale.id, handleApiError(error));
+          setSyncError('Some offline sales could not sync yet. They will retry when the connection is available.');
           break;
         }
       }
+      setQueuedCount(loadQueue().length);
     };
     void flushQueue();
   }, [online]);
@@ -145,6 +150,7 @@ export const SalesPage: React.FC = () => {
       };
       if (!online) {
         queueSale(payload);
+        setQueuedCount(loadQueue().length);
         return { receiptNumber: `OFF-${Date.now()}` };
       }
       const result = await api.post('/sales', payload);
@@ -176,6 +182,7 @@ export const SalesPage: React.FC = () => {
       };
       if (!online) {
         queueSale(payload);
+        setQueuedCount(loadQueue().length);
         return { receiptNumber: `OFF-${Date.now()}` };
       }
       const result = await api.post('/sales', payload);
@@ -207,6 +214,7 @@ export const SalesPage: React.FC = () => {
       </header>
 
       {toast && <div className="fixed right-4 top-20 z-40 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{toast}</div>}
+      {queuedCount > 0 && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" role="status">{queuedCount} offline sale{queuedCount === 1 ? '' : 's'} waiting to sync{syncError ? `: ${syncError}` : '.'}</div>}
 
       <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
         <section className="space-y-4">
@@ -214,9 +222,9 @@ export const SalesPage: React.FC = () => {
             <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-sky-600" size={21} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product or scan barcode" autoFocus className="h-14 w-full rounded-2xl border-0 bg-sky-50/80 pl-12 pr-4 text-lg outline-none ring-2 ring-transparent transition focus:ring-sky-300" />
           </div>
-          <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid max-h-[32rem] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 xl:grid-cols-4">
             {productsLoading && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Loading products...</div>}
-            {!productsLoading && products.slice(0, 4).map((product) => (
+            {!productsLoading && products.map((product) => (
               <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group min-h-36 rounded-3xl border border-white/80 bg-white/80 p-4 text-left shadow-lg shadow-slate-200/50 transition hover:-translate-y-1 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50">
                 <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><ShoppingCart size={20} /></span>
                 <span className="block truncate font-bold text-slate-800">{product.name}</span>

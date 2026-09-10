@@ -7,6 +7,8 @@ export interface OfflineSale {
   id: string;
   createdAt: string;
   payload: unknown;
+  attempts?: number;
+  lastError?: string;
 }
 
 export function loadCart<T>(): T[] {
@@ -54,6 +56,11 @@ export function loadQueue(): OfflineSale[] {
 
 export function removeQueuedSale(id: string): void {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(loadQueue().filter((sale) => sale.id !== id)));
+}
+
+export function markQueuedSaleFailed(id: string, error: string): void {
+  const queue = loadQueue().map((sale) => sale.id === id ? { ...sale, attempts: (sale.attempts || 0) + 1, lastError: error } : sale);
+  localStorage.setItem(QUEUE_KEY, JSON.stringify(queue));
 }
 
 export function loadCurrentUser<T>(): T | null {

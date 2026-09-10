@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import type { DashboardStats } from '../../lib/types';
+import { money } from '../../lib/helpers';
 
 interface InventorySummary {
   totalProducts: number;
@@ -38,7 +39,7 @@ export const AnalyticsPage: React.FC = () => {
   const paymentSummary = (sales?.byPayment as PaymentSummary[] | undefined) || [];
   const maxRevenue = Math.max(...trend.map((point) => point.revenue), 1);
 
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+  const fmt = (n: number) => money(n);
 
   return (
     <div className="space-y-6">
