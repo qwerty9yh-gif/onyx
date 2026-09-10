@@ -112,7 +112,7 @@ export const LoginPage: React.FC = () => {
     <button
       key={user.id}
       onClick={() => openUser(user)}
-      className="group flex min-h-48 flex-col items-center rounded-3xl border border-red-100 bg-white/90 p-3 text-center shadow-lg shadow-red-950/10 backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 sm:p-5 animate-fade-in"
+      className="onyx-layered-card group flex min-h-48 flex-col items-center rounded-3xl border border-red-100 bg-white/90 p-3 text-center shadow-lg shadow-red-950/10 backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 sm:p-5 animate-fade-in"
     >
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-lg font-extrabold text-white shadow-glow-red sm:h-16 sm:w-16 sm:text-xl">
         {(user.firstName?.[0] || '?') + (user.lastName?.[0] || '')}
@@ -178,7 +178,7 @@ return (
       {selected && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4 backdrop-blur-sm animate-fade-in" onClick={close}>
           <div
-            className="w-full max-w-md rounded-4xl onyx-glass p-8 animate-pop-in"
+            className="w-full max-w-sm rounded-3xl onyx-glass p-5 shadow-xl shadow-red-950/15 animate-pop-in"
             onClick={(e) => e.stopPropagation()}
             onKeyDown={(e) => { if (e.key === 'Escape') close(); }}
           >

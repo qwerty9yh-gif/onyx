@@ -9,9 +9,10 @@
   font-synthesis: none;
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
-  --onyx-red: #dc2626;
-  --onyx-red-dark: #b91c1c;
-  --onyx-red-bright: #ef4444;
+  --onyx-red: #f00000;
+  --onyx-red-dark: #b00000;
+  --onyx-red-bright: #ff0000;
+  --onyx-logo-gradient: linear-gradient(160deg, #ff0000 0%, #f00000 46%, #b00000 78%, #8f0000 100%);
   color-scheme: light;
 }
 
@@ -36,6 +37,24 @@ button, input, select {
 
 .cashier-surface {
   background: linear-gradient(135deg, rgba(255, 247, 247, 0.98), rgba(248, 250, 252, 0.94));
+}
+
+.onyx-layered-card {
+  position: relative;
+  isolation: isolate;
+}
+
+.onyx-layered-card::before {
+  position: absolute;
+  z-index: -1;
+  inset: 6px -5px -6px 5px;
+  border-radius: inherit;
+  background: linear-gradient(145deg, rgba(255, 232, 232, 0.95), rgba(255, 202, 202, 0.7));
+  content: '';
+}
+
+.onyx-brand-gradient {
+  background: var(--onyx-logo-gradient);
 }
 
 .cashier-dock {
@@ -69,7 +88,7 @@ button, input, select {
   text-decoration: none;
 }
 
-.cashier-dock a.active { color: #dc2626; text-shadow: 0 0 12px rgba(220, 38, 38, 0.3); }
+.cashier-dock a.active { color: #fff; background: var(--onyx-logo-gradient); border-radius: 14px; text-shadow: 0 0 12px rgba(255, 255, 255, 0.35); }
 .cashier-dock .cashier-dock-sale {
   width: 64px;
   height: 64px;
@@ -109,7 +128,7 @@ button, input, select {
 }
 
 .onyx-text-gradient {
-  background: linear-gradient(120deg, #b91c1c 0%, #dc2626 45%, #ef4444 100%);
+  background: var(--onyx-logo-gradient);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;

@@ -38,7 +38,7 @@ export const Layout: React.FC = () => {
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
           <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
-          {['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(role || '') && <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>}
+          <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
         </nav>
     </div>
