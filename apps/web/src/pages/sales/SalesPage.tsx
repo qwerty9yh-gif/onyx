@@ -2,10 +2,11 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, CreditCard, CheckCircle, FileText, Minus, Plus, Printer, Search, ShoppingCart, Trash2, Wifi, WifiOff } from 'lucide-react';
 import { api, handleApiError } from '../../lib/api';
-import type { Product, Sale, User } from '../../lib/types';
+import { money } from '../../lib/helpers';
+import type { PaymentMethod, Product, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { clearCart, loadCart, loadProducts, loadQueue, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
-import { printInvoice, printReceipt, InvoiceData, ReceiptData } from '../../lib/printer';
+import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 
 interface CartItem {
   productId: string;
@@ -16,9 +17,12 @@ interface CartItem {
   taxRate: number;
 }
 
-type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'QR';
-
-const money = (value: number) => `$${value.toFixed(2)}`;
+// ── Business identity used on invoices & receipts ──────────────────────────
+export const BUSINESS = {
+  name: 'ONYX LOUNGE / PUB',
+  location: 'Malam Bawi',
+  phone: '0555554167',
+};
 
 export const SalesPage: React.FC = () => {
   const [search, setSearch] = useState('');
@@ -229,16 +233,35 @@ export const SalesPage: React.FC = () => {
             {cart.map((item) => <div key={item.productId} className="rounded-2xl bg-sky-50/80 p-3"><div className="flex justify-between gap-3"><div><p className="font-semibold text-slate-800">{item.name}</p><p className="text-xs text-slate-500">{money(item.unitPrice)} each</p></div><strong>{money(item.unitPrice * item.quantity)}</strong></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={() => updateQuantity(item.productId, -1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Minus size={16} /></button><span className="min-w-8 text-center font-bold">{item.quantity}</span><button type="button" onClick={() => updateQuantity(item.productId, 1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Plus size={16} /></button></div></div>)}
             {!cart.length && <div className="rounded-2xl border border-dashed border-sky-200 p-8 text-center text-slate-500">Your cart is ready.</div>}
           </div>
-          <div className="space-y-2 border-t border-slate-200 pt-4 text-sm"><div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div><div className="flex justify-between"><span>Tax</span><strong>{money(tax)}</strong></div><div className="flex justify-between pt-2 text-2xl font-bold"><span>Total</span><strong className="text-sky-700">{money(total)}</strong></div></div>
-          <div className="mt-5 grid grid-cols-2 gap-2">{(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => <button type="button" key={method} onClick={() => setPaymentMethod(method)} className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'bg-sky-600 text-white shadow-lg shadow-sky-200' : 'bg-slate-100 text-slate-600'}`}>{method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}{method}</button>)}</div>
-          <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)} placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-slate-100 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-sky-300" />
-          <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className="text-emerald-600">{money(change)}</span></div>
-          <div className="mt-5 grid grid-cols-2 gap-3">
-            <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total} onClick={() => markPaidMutation.mutate()}><CheckCircle className="mr-2" size={20} />Mark as Paid</Button>
-            <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600" loading={saveUnpaidMutation.isPending} disabled={!cart.length} onClick={() => saveUnpaidMutation.mutate()}><FileText className="mr-2" size={20} />Save as Unpaid</Button>
-          </div>
-          {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(markPaidMutation.error)} Cart was not cleared.</p>}
-          {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(saveUnpaidMutation.error)} Cart was not cleared.</p>}
+          <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
+          <div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
+          <div className="flex justify-between"><span>Tax</span><strong>{money(tax)}</strong></div>
+          <div className="flex justify-between pt-2 text-2xl font-bold"><span>Total</span><strong className="text-sky-700">{money(total)}</strong></div>
+        </div>
+        <div className="mt-5 grid grid-cols-2 gap-2">
+          {(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
+            <button type="button" key={method} onClick={() => setPaymentMethod(method)}
+              className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'bg-sky-600 text-white shadow-lg shadow-sky-200' : 'bg-slate-100 text-slate-600'}`}>
+              {method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}
+              {method}
+            </button>
+          ))}
+        </div>
+        <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)}
+          placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-slate-100 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-sky-300" />
+        <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className="text-emerald-600">{money(change)}</span></div>
+        <div className="mt-5 grid grid-cols-2 gap-3">
+          <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total}
+            onClick={() => markPaidMutation.mutate()}>
+            <CheckCircle className="mr-2" size={20} />Mark as Paid
+          </Button>
+          <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600" loading={saveUnpaidMutation.isPending} disabled={!cart.length}
+            onClick={() => saveUnpaidMutation.mutate()}>
+            <FileText className="mr-2" size={20} />Save as Unpaid
+          </Button>
+        </div>
+        {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(markPaidMutation.error)} Cart was not cleared.</p>}
+        {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(saveUnpaidMutation.error)} Cart was not cleared.</p>}
         </aside>
       </div>
 

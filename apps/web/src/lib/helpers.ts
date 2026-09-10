@@ -1,3 +1,17 @@
+/** Centralized currency formatter — GH₵ for the ONYX POS application */
+export const money = (value: number | string): string => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (!Number.isFinite(num)) return 'GH₵0.00';
+  return `GH₵${num.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+};
+
+/** Compact money for small spaces */
+export const moneyShort = (value: number | string): string => {
+  const num = typeof value === 'string' ? parseFloat(value) : value;
+  if (!Number.isFinite(num)) return 'GH₵0';
+  return `GH₵${Math.round(num)}`;
+};
+
 export function roundToTwoDecimals(value: number): number {
   return Number(value.toFixed(2));
 }
@@ -6,11 +20,20 @@ export function calculateTotal(subtotal: number, discount: number, tax: number):
   return Number((subtotal - discount + tax).toFixed(2));
 }
 
-export function formatCurrency(amount: number, currency: string = 'USD'): string {
+export function formatCurrency(amount: number, currency: string = 'GHS'): string {
   return new Intl.NumberFormat('en-US', {
     style: 'currency',
     currency,
+    currencyDisplay: 'code',
   }).format(amount || 0);
+}
+
+export function formatCurrencyShort(amount: number): string {
+  return `GH₵${(amount || 0).toFixed(2)}`;
+}
+
+export function formatCurrencyCompact(amount: number): string {
+  return `GH₵${(amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 export function formatDate(date: Date | string): string {

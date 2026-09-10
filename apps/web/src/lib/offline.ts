@@ -1,6 +1,7 @@
 const CART_KEY = 'onyx:cart';
 const QUEUE_KEY = 'onyx:offline-sales';
 const PRODUCTS_KEY = 'onyx:products';
+const USER_KEY = 'onyx:current-user';
 
 export interface OfflineSale {
   id: string;
@@ -53,4 +54,21 @@ export function loadQueue(): OfflineSale[] {
 
 export function removeQueuedSale(id: string): void {
   localStorage.setItem(QUEUE_KEY, JSON.stringify(loadQueue().filter((sale) => sale.id !== id)));
+}
+
+export function loadCurrentUser<T>(): T | null {
+  try {
+    const raw = localStorage.getItem(USER_KEY);
+    return raw ? (JSON.parse(raw) as T) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function saveCurrentUser<T>(user: T): void {
+  localStorage.setItem(USER_KEY, JSON.stringify(user));
+}
+
+export function clearCurrentUser(): void {
+  localStorage.removeItem(USER_KEY);
 }

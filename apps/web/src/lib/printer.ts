@@ -1,4 +1,5 @@
 import { qrMatrix, qrSvgDataUrl } from './qr';
+import type { PaymentMethod } from './types';
 
 export interface ReceiptLine {
   name: string;
@@ -11,31 +12,38 @@ export interface ReceiptData {
   storeName: string;
   receiptNumber: string;
   cashier: string;
-  customer?: string;
   createdAt: string;
+  customer?: string;
   lines: ReceiptLine[];
   subtotal: number;
   discount: number;
   tax: number;
   total: number;
-  paymentMethod: string;
+  paymentMethod: PaymentMethod;
   amountReceived: number;
   change: number;
+}
+
+export interface InvoiceLine {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
 }
 
 export interface InvoiceData {
   storeName: string;
   invoiceNumber: string;
   cashier: string;
-  customer?: string;
   createdAt: string;
-  lines: ReceiptLine[];
+  customer?: string;
+  lines: InvoiceLine[];
   subtotal: number;
   discount: number;
   tax: number;
   total: number;
-  dueDate?: string;
   status?: string;
+  dueDate?: string;
 }
 
 const ESC = '\x1b';
@@ -45,12 +53,12 @@ function text(value: string): Uint8Array {
   return new TextEncoder().encode(value);
 }
 
-/** Build a GS v 0 raster bit image command from a QR boolean matrix (thermal printers). */
 function buildQrRaster(qr: { size: number; dark: (row: number, col: number) => boolean }, scale = 4, margin = 2): Uint8Array {
   const moduleCount = qr.size + margin * 2;
   const width = moduleCount * scale;
   const bytesPerRow = Math.ceil(width / 8);
   const raster: number[] = [];
+
   for (let row = 0; row < moduleCount; row++) {
     let byte = 0;
     let bit = 0;
@@ -72,12 +80,14 @@ function buildQrRaster(qr: { size: number; dark: (row: number, col: number) => b
       bit = 0;
     }
   }
+
   const height = moduleCount * scale;
   const header = new Uint8Array([
     GS.charCodeAt(0), 'v'.charCodeAt(0), 48,
     bytesPerRow & 0xff, (bytesPerRow >> 8) & 0xff,
     height & 0xff, (height >> 8) & 0xff,
   ]);
+
   return new Uint8Array([...header, ...raster]);
 }
 
@@ -85,14 +95,16 @@ export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
   const qr = qrMatrix(`ONYX|${receipt.receiptNumber}|${receipt.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
     text(`${ESC}@${ESC}a\x01ONYX POS\n`),
-    text(` ${ESC}a\x00${receipt.storeName}\n`),
+    text(`${ESC}a\x00${receipt.storeName}\n`),
     text(`${ESC}a\x01Receipt ${receipt.receiptNumber}\n`),
     text(`${ESC}a\x00${receipt.createdAt}\nCashier: ${receipt.cashier}${receipt.customer ? `\nCustomer: ${receipt.customer}` : ''}\n`),
     text('------------------------------------------\n'),
   ];
+
   for (const line of receipt.lines) {
     chunks.push(text(` ${line.name.slice(0, 26)}\n  ${line.quantity} x ${line.unitPrice.toFixed(2)}  ${line.total.toFixed(2)}\n`));
   }
+
   chunks.push(text('------------------------------------------\n'));
   chunks.push(text(`Subtotal:                 ${receipt.subtotal.toFixed(2)}\nDiscount:                 ${receipt.discount.toFixed(2)}\nTax:                      ${receipt.tax.toFixed(2)}\n`));
   chunks.push(text(`${ESC}a\x01TOTAL:                    ${receipt.total.toFixed(2)}\n`));
@@ -108,14 +120,16 @@ export function buildEscPosInvoice(invoice: InvoiceData): Uint8Array {
   const qr = qrMatrix(`ONYX|${invoice.invoiceNumber}|${invoice.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
     text(`${ESC}@${ESC}a\x01ONYX POS\n`),
-    text(` ${ESC}a\x00INVOICE · ${invoice.storeName}\n`),
+    text(`${ESC}a\x00INVOICE · ${invoice.storeName}\n`),
     text(`${ESC}a\x01Invoice ${invoice.invoiceNumber}\n`),
     text(`${ESC}a\x00${invoice.createdAt}\nCashier: ${invoice.cashier}${invoice.customer ? `\nCustomer: ${invoice.customer}` : ''}\nStatus: ${invoice.status || 'UNPAID'} ${invoice.dueDate ? ` · Due ${invoice.dueDate}` : ''}\n`),
     text('------------------------------------------\n'),
   ];
+
   for (const line of invoice.lines) {
     chunks.push(text(` ${line.name.slice(0, 26)}\n  ${line.quantity} x ${line.unitPrice.toFixed(2)}  ${line.total.toFixed(2)}\n`));
   }
+
   chunks.push(text('------------------------------------------\n'));
   chunks.push(text(`Subtotal:                 ${invoice.subtotal.toFixed(2)}\nDiscount:                 ${invoice.discount.toFixed(2)}\nTax:                      ${invoice.tax.toFixed(2)}\n`));
   chunks.push(text(`${ESC}a\x01TOTAL DUE:                ${invoice.total.toFixed(2)}\n`));
@@ -166,6 +180,7 @@ const PRINT_STYLES = `
 function printDocument(html: string, title: string): void {
   const win = window.open('', '_blank', 'width=480,height=820');
   const documentHtml = `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title><style>${PRINT_STYLES}</style></head><body>${html}</body></html>`;
+
   if (!win) {
     const frame = document.createElement('iframe');
     frame.setAttribute('title', title);
@@ -174,14 +189,23 @@ function printDocument(html: string, title: string): void {
     frame.style.height = '0';
     frame.style.border = '0';
     document.body.appendChild(frame);
+
     const frameDocument = frame.contentDocument;
-    if (!frameDocument) { frame.remove(); return; }
+    if (!frameDocument) {
+      frame.remove();
+      return;
+    }
+
     frameDocument.open();
     frameDocument.write(documentHtml);
     frameDocument.close();
-    frame.onload = () => { frame.contentWindow?.print(); window.setTimeout(() => frame.remove(), 1000); };
+    frame.onload = () => {
+      frame.contentWindow?.print();
+      window.setTimeout(() => frame.remove(), 1000);
+    };
     return;
   }
+
   try {
     win.document.write(documentHtml);
     win.document.close();
@@ -192,7 +216,6 @@ function printDocument(html: string, title: string): void {
   }
 }
 
-/** Print a sales receipt using the browser print dialog. */
 export function printReceipt(receipt: ReceiptData): void {
   const qr = qrSvgDataUrl(`ONYX|${receipt.receiptNumber}|${receipt.total.toFixed(2)}`, 6, 4);
   const html = `
@@ -212,7 +235,7 @@ export function printReceipt(receipt: ReceiptData): void {
       <table class="items">
         <thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead>
         <tbody>
-          ${receipt.lines.map((l) => `<tr><td>${l.name}</td><td class="c">${l.quantity}</td><td class="r">${l.unitPrice.toFixed(2)}</td><td class="r">${l.total.toFixed(2)}</td></tr>`).join('')}
+          ${receipt.lines.map((line) => `<tr><td>${line.name}</td><td class="c">${line.quantity}</td><td class="r">${line.unitPrice.toFixed(2)}</td><td class="r">${line.total.toFixed(2)}</td></tr>`).join('')}
           <tr class="sep"><td colspan="4"></td></tr>
           <tr><td colspan="3" class="lbl">Subtotal</td><td class="r">${receipt.subtotal.toFixed(2)}</td></tr>
           <tr><td colspan="3" class="lbl">Discount</td><td class="r">-${receipt.discount.toFixed(2)}</td></tr>
@@ -228,7 +251,6 @@ export function printReceipt(receipt: ReceiptData): void {
   printDocument(html, `Receipt ${receipt.receiptNumber}`);
 }
 
-/** Print an invoice using the browser print dialog. */
 export function printInvoice(invoice: InvoiceData): void {
   const qr = qrSvgDataUrl(`ONYX|${invoice.invoiceNumber}|${invoice.total.toFixed(2)}`, 6, 4);
   const html = `
@@ -243,13 +265,13 @@ export function printInvoice(invoice: InvoiceData): void {
         <tr><td>Date</td><td>${invoice.createdAt}</td></tr>
         <tr><td>Cashier</td><td>${invoice.cashier}</td></tr>
         ${invoice.customer ? `<tr><td>Customer</td><td>${invoice.customer}</td></tr>` : ''}
-        <tr><td>Status</td><td><strong>UNPAID</strong></td></tr>
+        <tr><td>Status</td><td><strong>${invoice.status || 'UNPAID'}</strong></td></tr>
         ${invoice.dueDate ? `<tr><td>Due</td><td>${invoice.dueDate}</td></tr>` : ''}
       </table>
       <table class="items">
         <thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead>
         <tbody>
-          ${invoice.lines.map((l) => `<tr><td>${l.name}</td><td class="c">${l.quantity}</td><td class="r">${l.unitPrice.toFixed(2)}</td><td class="r">${l.total.toFixed(2)}</td></tr>`).join('')}
+          ${invoice.lines.map((line) => `<tr><td>${line.name}</td><td class="c">${line.quantity}</td><td class="r">${line.unitPrice.toFixed(2)}</td><td class="r">${line.total.toFixed(2)}</td></tr>`).join('')}
           <tr class="sep"><td colspan="4"></td></tr>
           <tr><td colspan="3" class="lbl">Subtotal</td><td class="r">${invoice.subtotal.toFixed(2)}</td></tr>
           <tr><td colspan="3" class="lbl">Discount</td><td class="r">-${invoice.discount.toFixed(2)}</td></tr>
