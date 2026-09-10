@@ -20,7 +20,7 @@
     "db:verify": "npm run verify-schema --workspace=apps/api",
     "db:seed": "tsx prisma/seed.ts",
     "db:generate": "prisma generate --schema prisma/schema.prisma",
-    "prestart": "npm run db:push && npm run db:generate && npm run db:verify"
+    "prestart": "npm run db:push && npm run db:generate && npm run db:verify && npm run db:seed"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"
