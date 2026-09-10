@@ -24,6 +24,9 @@ import { prisma } from './utils/prisma.js';
 
 const app = express();
 
+// Render terminates TLS and forwards the client address in X-Forwarded-For.
+app.set('trust proxy', 1);
+
 // Security middleware
 app.use(helmet({
   contentSecurityPolicy: false,

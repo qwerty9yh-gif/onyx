@@ -3,7 +3,7 @@ services:
     name: onyx-api
     runtime: node
     buildCommand: npm ci --include=dev && npx prisma db push --schema prisma/schema.prisma && npm run db:generate && npm run verify-schema --workspace=apps/api && npm run build:api
-    startCommand: npm run start --workspace=apps/api
+    startCommand: npm run start
     healthCheckPath: /api/health
     envVars:
       - key: NODE_ENV
