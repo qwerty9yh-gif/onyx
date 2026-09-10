@@ -20,7 +20,7 @@ async function seedUsers() {
     const passwordHash = await bcrypt.hash(u.password, 12);
     await prisma.user.upsert({
       where: { email: u.email },
-      update: { role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash },
+      update: { username: u.username, role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash },
       create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash },
     });
   }
