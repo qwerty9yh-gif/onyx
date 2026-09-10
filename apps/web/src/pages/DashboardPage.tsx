@@ -7,6 +7,7 @@ import {
   LayoutDashboard, ShoppingCart, Package, TrendingUp, AlertTriangle,
   DollarSign, ShoppingBag, Clock, FileText,
 } from 'lucide-react';
+import { money } from '../lib/helpers';
 
 const StatCard: React.FC<{
   title: string;
@@ -35,12 +36,12 @@ const StatCard: React.FC<{
 };
 
 export const DashboardPage: React.FC = () => {
-  const { data: stats, isLoading } = useQuery<DashboardStats>({
+  const { data: stats, isLoading, isError } = useQuery<DashboardStats>({
     queryKey: ['dashboard'],
     queryFn: () => api.get('/analytics/dashboard').then((res) => res.data.data),
   });
 
-  if (isLoading || !stats) {
+  if (isLoading) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[...Array(8)].map((_, i) => (
@@ -53,7 +54,11 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
+  if (isError || !stats) {
+    return <div className="onyx-layered-card rounded-3xl border border-red-100 bg-white p-8 text-center shadow-lg shadow-red-950/10"><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="mt-2 text-sm text-slate-600">Live dashboard data is temporarily unavailable.</p></div>;
+  }
+
+  const fmt = (n: number) => money(n);
 
   return (
     <div className="space-y-6">

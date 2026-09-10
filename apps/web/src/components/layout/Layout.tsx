@@ -18,6 +18,7 @@ export const Layout: React.FC = () => {
   });
   const dailyReset = useMutation({ mutationFn: () => api.post('/sales/daily-reset') });
   const role = me?.role || getUser()?.role;
+  const isWebView1 = typeof navigator !== 'undefined' && /WebView1/i.test(navigator.userAgent);
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900">
       <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -34,13 +35,13 @@ export const Layout: React.FC = () => {
           <Outlet />
         </main>
       </div>
-        <nav className="cashier-dock" aria-label="Main navigation">
+        {!isWebView1 && <nav className="cashier-dock" aria-label="Main navigation">
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
           <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
           <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
-        </nav>
+        </nav>}
     </div>
   );
 };

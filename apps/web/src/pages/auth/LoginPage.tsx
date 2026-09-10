@@ -63,7 +63,10 @@ export const LoginPage: React.FC = () => {
   });
 
   const handleSubmit = async () => {
-    if (!selected || !password) return;
+    if (!selected || !/^\d{6}$/.test(password)) {
+      setError('Enter your 6-digit PIN.');
+      return;
+    }
     setBusy(true);
     setError('');
     try {
@@ -202,10 +205,13 @@ return (
               <input
                 autoFocus
                 type="password"
+                inputMode="numeric"
+                pattern="[0-9]{6}"
+                maxLength={6}
                 value={password}
                 onChange={(e) => { setPassword(e.target.value); setError(''); }}
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleSubmit(); }}
-                placeholder="Password"
+                placeholder="6-digit PIN"
                 aria-label="Password"
                 className="onyx-focus-ring h-14 w-full rounded-2xl border border-red-200 bg-red-50 px-4 text-lg shadow-inner outline-none placeholder:text-red-300"
               />

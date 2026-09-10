@@ -2,7 +2,7 @@ import { qrMatrix, qrSvgDataUrl } from './qr';
 import type { PaymentMethod } from './types';
 
 const VENUE_NAME = 'ONYX LOUNGE / PUB';
-const VENUE_LOCATION = 'Malam Bawi';
+const VENUE_LOCATION = 'Mallam Gbawe';
 const VENUE_PHONE = '0555554167';
 const formatCedi = (value: number) => `GH₵${value.toFixed(2)}`;
 

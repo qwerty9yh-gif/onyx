@@ -55,7 +55,7 @@ export const TransactionsPage: React.FC = () => {
   const open = (sale: Sale) => { setSelected(sale); setError(''); };
   const print = (sale: Sale) => { printInvoice(invoiceFor(sale)); setSelected(null); };
   const section = (title: string, rows: Sale[]) => (
-    <section className="onyx-layered-card max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto rounded-3xl border border-red-100 bg-white/90 p-4 pr-3 shadow-lg shadow-red-950/10">
+    <section className="max-h-[calc(100vh-18rem)] space-y-3 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-white p-4 pr-3 shadow-lg shadow-red-950/10">
       <div className="flex items-center justify-between"><h2 className="text-xl font-bold text-slate-800">{title}</h2><span className="rounded-full bg-red-100 px-3 py-1 text-xs font-bold text-brand-700">{rows.length}</span></div>
       {rows.length ? rows.map((sale) => (
         <button type="button" key={sale.id} onClick={() => open(sale)} className="onyx-layered-card w-full rounded-2xl border border-red-100 bg-white p-4 text-left shadow-md shadow-red-950/10 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-glow-red">

@@ -20,7 +20,7 @@ interface CartItem {
 // ── Business identity used on invoices & receipts ──────────────────────────
 export const BUSINESS = {
   name: 'ONYX LOUNGE / PUB',
-  location: 'Malam Bawi',
+  location: 'Mallam Gbawe',
   phone: '0555554167',
 };
 
@@ -34,6 +34,7 @@ export const SalesPage: React.FC = () => {
   const [queuedCount, setQueuedCount] = useState(() => loadQueue().length);
   const [syncError, setSyncError] = useState('');
   const [printPrompt, setPrintPrompt] = useState<ReceiptData | null>(null);
+  const [receiptViewId, setReceiptViewId] = useState<string | null>(null);
   const cartRef = useRef<HTMLElement>(null);
   const queryClient = useQueryClient();
 
@@ -89,7 +90,7 @@ export const SalesPage: React.FC = () => {
   const tax = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice * item.quantity * item.taxRate, 0), [cart]);
   const total = Number((subtotal + tax).toFixed(2));
   const received = Number(amountReceived) || 0;
-  const change = Math.max(0, received - total);
+  const change = Number((received - total).toFixed(2));
 
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
@@ -151,15 +152,16 @@ export const SalesPage: React.FC = () => {
       if (!online) {
         queueSale(payload);
         setQueuedCount(loadQueue().length);
-        return { receiptNumber: `OFF-${Date.now()}` };
+        return { receiptNumber: `OFF-${Date.now()}`, id: null };
       }
       const result = await api.post('/sales', payload);
-      return { receiptNumber: result.data.data.receiptNumber as string };
+      return { receiptNumber: result.data.data.receiptNumber as string, id: result.data.data.id as string };
     },
     onSuccess: (res) => {
       const receiptNumber = res.receiptNumber;
       if (!receiptNumber.startsWith('OFF-')) {
         setPrintPrompt(buildReceiptData(receiptNumber, true));
+        setReceiptViewId(res.id);
       }
       clearCart();
       setCart([]);
@@ -183,10 +185,10 @@ export const SalesPage: React.FC = () => {
       if (!online) {
         queueSale(payload);
         setQueuedCount(loadQueue().length);
-        return { receiptNumber: `OFF-${Date.now()}` };
+        return { receiptNumber: `OFF-${Date.now()}`, id: null };
       }
       const result = await api.post('/sales', payload);
-      return { receiptNumber: result.data.data.receiptNumber as string };
+      return { receiptNumber: result.data.data.receiptNumber as string, id: result.data.data.id as string };
     },
     onSuccess: (res) => {
       const receiptNumber = res.receiptNumber;
@@ -257,7 +259,7 @@ export const SalesPage: React.FC = () => {
         </div>
         <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)}
           placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-slate-100 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-sky-300" />
-        <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className="text-emerald-600">{money(change)}</span></div>
+        <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className={change < 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(change)}</span></div>
         <div className="mt-5 grid grid-cols-2 gap-3">
           <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total}
             onClick={() => markPaidMutation.mutate()}>
@@ -281,6 +283,7 @@ export const SalesPage: React.FC = () => {
             <div className="mt-6 grid grid-cols-2 gap-3">
               <Button className="rounded-2xl bg-sky-600 hover:bg-sky-700" onClick={() => { printReceipt(printPrompt); setPrintPrompt(null); }}><Printer className="mr-2" size={18} />Print Receipt</Button>
               <Button variant="outline" className="rounded-2xl" onClick={() => setPrintPrompt(null)}>Not now</Button>
+              <Button variant="outline" className="col-span-2 rounded-2xl" disabled={!receiptViewId} onClick={() => { if (receiptViewId) window.location.assign(`/sales/${receiptViewId}/receipt`); }}>View Receipt</Button>
             </div>
           </div>
         </div>
