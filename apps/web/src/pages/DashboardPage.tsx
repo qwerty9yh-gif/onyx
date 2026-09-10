@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { DashboardStats } from '../lib/types';
 import { Badge } from '../components/ui/Badge';
 import {
   LayoutDashboard, ShoppingCart, Package, TrendingUp, AlertTriangle,
-  DollarSign, ShoppingBag, Clock, FileText,
+  DollarSign, ShoppingBag, Clock, FileText, WifiOff,
 } from 'lucide-react';
 import { money } from '../lib/helpers';
+import { loadCachedDashboardStats, cacheDashboardStats } from '../lib/offline';
+import { getUser } from '../lib/auth';
 
 const StatCard: React.FC<{
   title: string;
@@ -36,12 +38,70 @@ const StatCard: React.FC<{
 };
 
 export const DashboardPage: React.FC = () => {
-  const { data: stats, isLoading, isError } = useQuery<DashboardStats>({
+  const [online, setOnline] = useState(navigator.onLine);
+  const [isOfflineMode, setIsOfflineMode] = useState(false);
+  const [cachedStats, setCachedStats] = useState<DashboardStats | null>(null);
+
+  const currentUser = getUser();
+  const userId = currentUser?.id;
+
+  const { data: stats, isLoading, isError, refetch } = useQuery<DashboardStats>({
     queryKey: ['dashboard'],
-    queryFn: () => api.get('/analytics/dashboard').then((res) => res.data.data),
+    queryFn: async () => {
+      const res = await api.get('/analytics/dashboard');
+      const data = res.data.data;
+      if (userId) cacheDashboardStats(userId, data);
+      setCachedStats(null);
+      setIsOfflineMode(false);
+      return data;
+    },
+    retry: false,
+    staleTime: 1000 * 30,
   });
 
-  if (isLoading) {
+  useEffect(() => {
+    const handleOnline = () => {
+      setOnline(true);
+      setIsOfflineMode(false);
+      refetch({ cancelRefetch: false });
+    };
+    const handleOffline = () => {
+      setOnline(false);
+    };
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    if (!online && stats === undefined && userId) {
+      const cached = loadCachedDashboardStats<DashboardStats>(userId);
+      if (cached) {
+        setCachedStats(cached);
+        setIsOfflineMode(true);
+      }
+    }
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [online, stats, userId, refetch]);
+
+  useEffect(() => {
+    if (userId && online && stats) {
+      cacheDashboardStats(userId, stats);
+    }
+  }, [stats, userId, online]);
+
+  useEffect(() => {
+    if (isError && userId && !online) {
+      const cached = loadCachedDashboardStats<DashboardStats>(userId);
+      if (cached) {
+        setCachedStats(cached);
+        setIsOfflineMode(true);
+      }
+    }
+  }, [isError, userId, online]);
+
+  if (isLoading && !isOfflineMode) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[...Array(8)].map((_, i) => (
@@ -54,51 +114,79 @@ export const DashboardPage: React.FC = () => {
     );
   }
 
-  if (isError || !stats) {
-    return <div className="onyx-layered-card rounded-3xl border border-red-100 bg-white p-8 text-center shadow-lg shadow-red-950/10"><h1 className="text-2xl font-bold text-slate-900">Dashboard</h1><p className="mt-2 text-sm text-slate-600">Live dashboard data is temporarily unavailable.</p></div>;
+  const displayStats = stats ?? cachedStats;
+
+  if (!displayStats) {
+    return (
+      <div className="onyx-layered-card rounded-3xl border border-red-100 bg-white p-8 text-center shadow-lg shadow-red-950/10">
+        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
+        {isOfflineMode ? (
+          <>
+            <p className="mt-2 text-sm text-slate-600">No dashboard data available offline.</p>
+            <p className="mt-1 text-xs text-slate-400">Connect to the internet to load live data.</p>
+          </>
+        ) : (
+          <p className="mt-2 text-sm text-slate-600">Dashboard data is temporarily unavailable.</p>
+        )}
+      </div>
+    );
   }
 
   const fmt = (n: number) => money(n);
 
   return (
     <div className="space-y-6">
-      <div>
-        <p className="text-sm font-semibold uppercase tracking-widest text-brand-600">ONYX POS</p>
-        <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
-        <p className="text-sm text-slate-500 mt-1">Overview of your business performance</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm font-semibold uppercase tracking-widest text-brand-600">ONYX POS</p>
+          <h1 className="text-3xl font-bold text-slate-900">Dashboard</h1>
+          <p className="text-sm text-slate-500 mt-1">Overview of your business performance</p>
+        </div>
+        {isOfflineMode && (
+          <div className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold bg-amber-100 text-amber-800">
+            <WifiOff size={16} />
+            <span>Offline — showing cached data</span>
+          </div>
+        )}
+        {!isOfflineMode && !online && (
+          <div className="flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold bg-amber-100 text-amber-800">
+            <WifiOff size={16} />
+            <span>Offline — no cached data</span>
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Today's Sales" value={stats.today.sales} icon={<ShoppingCart size={20} />} change="+12%" tone="red" />
-        <StatCard title="Today's Revenue" value={fmt(stats.today.revenue)} icon={<DollarSign size={20} />} tone="white" />
-        <StatCard title="This Week" value={stats.week.sales} icon={<ShoppingBag size={20} />} tone="white" />
-        <StatCard title="Week Revenue" value={fmt(stats.week.revenue)} icon={<TrendingUp size={20} />} tone="dark" />
+        <StatCard title="Today's Sales" value={displayStats.today.sales} icon={<ShoppingCart size={20} />} change="+12%" tone="red" />
+        <StatCard title="Today's Revenue" value={fmt(displayStats.today.revenue)} icon={<DollarSign size={20} />} tone="white" />
+        <StatCard title="This Week" value={displayStats.week.sales} icon={<ShoppingBag size={20} />} tone="white" />
+        <StatCard title="Week Revenue" value={fmt(displayStats.week.revenue)} icon={<TrendingUp size={20} />} tone="dark" />
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard title="Month Sales" value={stats.month.sales} icon={<LayoutDashboard size={20} />} tone="white" />
-        <StatCard title="Month Revenue" value={fmt(stats.month.revenue)} icon={<Package size={20} />} tone="white" />
-        <StatCard title="Pending Invoices" value={stats.pendingInvoices || 0} icon={<FileText size={20} />} tone="white" />
-        <StatCard title="Avg. Transaction" value={fmt(stats.avgTransaction)} icon={<DollarSign size={20} />} tone="white" />
+        <StatCard title="Month Sales" value={displayStats.month.sales} icon={<LayoutDashboard size={20} />} tone="white" />
+        <StatCard title="Month Revenue" value={fmt(displayStats.month.revenue)} icon={<Package size={20} />} tone="white" />
+        <StatCard title="Pending Invoices" value={displayStats.pendingInvoices || 0} icon={<FileText size={20} />} tone="white" />
+        <StatCard title="Avg. Transaction" value={fmt(displayStats.avgTransaction)} icon={<DollarSign size={20} />} tone="white" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-bold text-slate-900">Low Stock Alerts</h2>
-            <Badge variant="warning"><AlertTriangle size={14} /> {stats.lowStock} items</Badge>
+            <Badge variant="warning"><AlertTriangle size={14} /> {displayStats.lowStock} items</Badge>
           </div>
-          {stats.lowStock === 0 ? (
+          {displayStats.lowStock === 0 ? (
             <p className="text-sm text-slate-500">All products are well stocked</p>
           ) : (
-            <p className="text-sm text-slate-600">{stats.lowStock} products are running low on stock</p>
+            <p className="text-sm text-slate-600">{displayStats.lowStock} products are running low on stock</p>
           )}
         </div>
 
         <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Top Products</h2>
           <div className="space-y-3">
-            {stats.topProducts?.slice(0, 5).map((p) => (
+            {displayStats.topProducts?.slice(0, 5).map((p) => (
               <div key={p.id} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-700">{p.name}</span>
                 <Badge variant="outline">{p.quantity} sold</Badge>
@@ -108,17 +196,24 @@ export const DashboardPage: React.FC = () => {
         </div>
       </div>
 
-      {stats.recentActivity && stats.recentActivity.length > 0 && (
+      {displayStats.recentActivity && displayStats.recentActivity.length > 0 && (
         <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Activity</h2>
           <div className="space-y-2">
-            {stats.recentActivity.slice(0, 5).map((log) => (
+            {displayStats.recentActivity.slice(0, 5).map((log) => (
               <div key={log.id} className="flex items-center justify-between text-sm">
                 <span className="text-slate-600">{log.user?.firstName} {log.user?.lastName} — {log.action}</span>
                 <span className="text-slate-400"><Clock size={12} className="inline mr-1" />{new Date(log.createdAt).toLocaleString()}</span>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {isOfflineMode && (
+        <div className="rounded-3xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+          <p><strong className="font-bold">Offline mode:</strong> Showing cached dashboard data from your last online session.
+          Data will refresh automatically when you reconnect. Tap <button type="button" onClick={() => refetch({ cancelRefetch: false })} className="underline font-semibold">here</button> to try reconnecting now.</p>
         </div>
       )}
     </div>

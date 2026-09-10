@@ -2,6 +2,7 @@ const CART_KEY = 'onyx:cart';
 const QUEUE_KEY = 'onyx:offline-sales';
 const PRODUCTS_KEY = 'onyx:products';
 const USER_KEY = 'onyx:current-user';
+const DASHBOARD_KEY = 'onyx:dashboard-stats';
 
 export interface OfflineSale {
   id: string;
@@ -9,6 +10,12 @@ export interface OfflineSale {
   payload: unknown;
   attempts?: number;
   lastError?: string;
+}
+
+export interface CachedDashboardStats {
+  userId: string;
+  stats: unknown;
+  cachedAt: string;
 }
 
 export function loadCart<T>(): T[] {
@@ -78,4 +85,25 @@ export function saveCurrentUser<T>(user: T): void {
 
 export function clearCurrentUser(): void {
   localStorage.removeItem(USER_KEY);
+}
+
+export function cacheDashboardStats(userId: string, stats: unknown): void {
+  const cached: CachedDashboardStats = { userId, stats, cachedAt: new Date().toISOString() };
+  localStorage.setItem(DASHBOARD_KEY, JSON.stringify(cached));
+}
+
+export function loadCachedDashboardStats<T>(userId: string): T | null {
+  try {
+    const raw = localStorage.getItem(DASHBOARD_KEY);
+    if (!raw) return null;
+    const cached = JSON.parse(raw) as CachedDashboardStats;
+    if (cached.userId !== userId) return null;
+    return cached.stats as T;
+  } catch {
+    return null;
+  }
+}
+
+export function clearCachedDashboardStats(): void {
+  localStorage.removeItem(DASHBOARD_KEY);
 }
