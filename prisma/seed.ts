@@ -3,8 +3,7 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Default ONYX POS System accounts (idempotent upsert).
-// Password: Onyx@2026 for all demo accounts.
+// Default ONYX POS administrator account (idempotent upsert).
 const defaultUsers: Array<{
   email: string;
   username: string;
@@ -13,10 +12,7 @@ const defaultUsers: Array<{
   role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'INVENTORY_STAFF';
   password: string;
 }> = [
-  { email: 'admin@onyx.com', username: 'onyx.admin', firstName: 'Onyx', lastName: 'Administrator', role: 'ADMIN', password: 'Onyx@2026' },
-  { email: 'manager@onyx.com', username: 'onyx.manager', firstName: 'Store', lastName: 'Manager', role: 'MANAGER', password: 'Onyx@2026' },
-  { email: 'cashier@onyx.com', username: 'onyx.cashier', firstName: 'Front', lastName: 'Cashier', role: 'CASHIER', password: 'Onyx@2026' },
-  { email: 'stock@onyx.com', username: 'onyx.stock', firstName: 'Stock', lastName: 'Keeper', role: 'INVENTORY_STAFF', password: 'Onyx@2026' },
+  { email: 'qwerty9yh@gmail.com', username: 'Admin k', firstName: 'ONYX', lastName: 'Administrator', role: 'ADMIN', password: '123456789' },
 ];
 
 async function seedUsers() {
@@ -28,7 +24,7 @@ async function seedUsers() {
       create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash },
     });
   }
-  console.log('Default ONYX users ready (password: Onyx@2026)');
+  console.log('ONYX admin account ready: qwerty9yh@gmail.com');
 }
 
 type CatalogItem = [name: string, price: number | null];
