@@ -28,11 +28,15 @@ services:
         sync: false
       - key: SYNC_INTERVAL
         value: 30
+      - key: HUBTEL_CLIENT_ID
+        sync: false
+      - key: HUBTEL_CLIENT_SECRET
+        sync: false
       - key: HUBTEL_API_KEY
         sync: false
       - key: HUBTEL_SENDER_ID
         sync: false
       - key: HUBTEL_BASE_URL
-        value: https://api.hubtel.com/v1
+        value: https://smsc.hubtel.com/v1
       - key: SMS_ENABLED
         value: "false"

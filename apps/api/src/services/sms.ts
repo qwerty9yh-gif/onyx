@@ -15,10 +15,19 @@ import { AppError } from '../middleware/errorHandler.js';
  * contacting Hubtel — safe for dev/testing without credentials.
  */
 
-const HUBTEL_API_KEY = process.env.HUBTEL_API_KEY || '';
+const HUBTEL_CLIENT_ID = process.env.HUBTEL_CLIENT_ID || process.env.CLIENT_ID || '';
+const HUBTEL_CLIENT_SECRET = process.env.HUBTEL_CLIENT_SECRET || process.env.HUBTEL_API_KEY || '';
 const HUBTEL_SENDER_ID = process.env.HUBTEL_SENDER_ID || '';
-const HUBTEL_BASE_URL = process.env.HUBTEL_BASE_URL || 'https://api.hubtel.com/v1';
+const HUBTEL_BASE_URL = process.env.HUBTEL_BASE_URL || 'https://smsc.hubtel.com/v1';
 const SMS_ENABLED = process.env.SMS_ENABLED === 'true';
+
+function normalizeHubtelPhone(raw: string): string {
+  const digits = raw.replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('233')) return digits;
+  if (digits.startsWith('0')) return `233${digits.slice(1)}`;
+  return digits;
+}
 
 function log(msg: string, payload?: Record<string, unknown>) {
   console.log(`[ONYX SMS] ${msg}`, payload ? JSON.stringify(payload) : '');
@@ -34,21 +43,33 @@ interface HubtelSendResponse {
 }
 
 async function postJson(path: string, body: Record<string, unknown>): Promise<HubtelSendResponse> {
-  const url = `${HUBTEL_BASE_URL}${path}`;
-  const res = await fetch(url, {
-    method: 'POST',
+  const url = new URL(`${HUBTEL_BASE_URL}${path}`);
+  const to = normalizeHubtelPhone(String(body.To || ''));
+  const text = String(body.Text || '');
+
+  url.searchParams.set('clientsecret', HUBTEL_CLIENT_SECRET);
+  url.searchParams.set('clientid', HUBTEL_CLIENT_ID);
+  url.searchParams.set('from', HUBTEL_SENDER_ID);
+  url.searchParams.set('to', to);
+  url.searchParams.set('content', text);
+
+  const res = await fetch(url.toString(), {
+    method: 'GET',
     headers: {
-      'Content-Type': 'application/json',
-      'Authorization': `Bearer ${HUBTEL_API_KEY}`,
       'Accept': 'application/json',
     },
-    body: JSON.stringify(body),
   });
+
+  const textBody = await res.text().catch(() => '');
   if (!res.ok) {
-    const text = await res.text().catch(() => '');
-    throw new Error(`Hubtel SMS error ${res.status}: ${text}`);
+    throw new Error(`Hubtel SMS error ${res.status}: ${textBody}`);
   }
-  return res.json() as Promise<HubtelSendResponse>;
+
+  try {
+    return JSON.parse(textBody) as HubtelSendResponse;
+  } catch {
+    return {} as HubtelSendResponse;
+  }
 }
 
 export interface SmsSendResult {
@@ -69,13 +90,17 @@ export async function sendSms(to: string, text: string): Promise<SmsSendResult> 
     log('SMS dry-run (SMS_ENABLED=false)', { to, preview: text.slice(0, 160) });
     return { success: true, messageId: 'dry-run' };
   }
-  if (!HUBTEL_API_KEY || !HUBTEL_SENDER_ID) {
-    log('SMS skipped: missing credentials', { to });
+  if (!HUBTEL_CLIENT_ID || !HUBTEL_CLIENT_SECRET || !HUBTEL_SENDER_ID) {
+    log('SMS skipped: missing credentials', { to, hasClientId: !!HUBTEL_CLIENT_ID, hasClientSecret: !!HUBTEL_CLIENT_SECRET, hasSenderId: !!HUBTEL_SENDER_ID });
     return { success: false, error: 'SMS credentials not configured' };
   }
   try {
+    const normalizedTo = normalizeHubtelPhone(to);
+    if (!normalizedTo) {
+      return { success: false, error: 'Invalid recipient phone number' };
+    }
     const body = {
-      To: to.trim(),
+      To: normalizedTo,
       From: HUBTEL_SENDER_ID,
       Text: text,
     };
@@ -150,20 +175,24 @@ export async function sendInvoiceSms(saleId: string, overridePhone?: string): Pr
 
   const result = await sendSms(phone, smsText);
 
-  await prisma.auditLog.create({
-    data: {
-      userId: 'system',
-      action: result.success ? 'SMS_INVOICE_SENT' : 'SMS_INVOICE_FAILED',
-      entity: 'sale',
-      entityId: saleId,
-      details: {
-        receiptNumber: sale.receiptNumber,
-        phone,
-        message: result.messageId || result.error,
-        success: result.success,
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        action: result.success ? 'SMS_INVOICE_SENT' : 'SMS_INVOICE_FAILED',
+        entity: 'sale',
+        entityId: saleId,
+        details: {
+          receiptNumber: sale.receiptNumber,
+          phone,
+          message: result.messageId || result.error,
+          success: result.success,
+        },
       },
-    },
-  });
+    });
+  } catch (auditErr) {
+    console.error('SMS audit log failed:', auditErr);
+  }
 
   return result;
 }
