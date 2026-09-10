@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
+import { getUser } from '../../lib/auth';
 
 interface NavItemProps {
   to: string;
@@ -37,7 +38,8 @@ export const Navigation: React.FC = () => {
     queryFn: () => api.get('/auth/me').then((res) => res.data.data),
     retry: false,
   });
-  const canManageInventory = ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(me?.role || '');
+  const role = me?.role || getUser()?.role;
+  const canManageInventory = ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(role || '');
   const canManageCustomers = ['ADMIN', 'MANAGER'].includes(me?.role || '');
 
   return (
@@ -52,11 +54,11 @@ export const Navigation: React.FC = () => {
       {canManageCustomers && <NavItem to="/customers" icon={<Users size={18} />} label="Customers" />}
       {canManageCustomers && <NavItem to="/suppliers" icon={<ShoppingBasket size={18} />} label="Suppliers" />}
       {canManageCustomers && <NavItem to="/categories" icon={<FileText size={18} />} label="Categories" />}
-      {me?.role === 'ADMIN' && <NavItem to="/reports" icon={<FileText size={18} />} label="Reports" />}
-      {me?.role === 'ADMIN' && <NavItem to="/analytics" icon={<BarChart3 size={18} />} label="Analytics" />}
-      {me?.role === 'ADMIN' && <NavItem to="/users" icon={<Shield size={18} />} label="Users" />}
+      {role === 'ADMIN' && <NavItem to="/reports" icon={<FileText size={18} />} label="Reports" />}
+      {role === 'ADMIN' && <NavItem to="/analytics" icon={<BarChart3 size={18} />} label="Analytics" />}
+      {role === 'ADMIN' && <NavItem to="/users" icon={<Shield size={18} />} label="Users" />}
       <NavItem to="/settings" icon={<Settings size={18} />} label="Settings" />
-      {me?.role === 'ADMIN' && <NavItem to="/sync" icon={<TrendingUp size={18} />} label="Sync" />}
+      {role === 'ADMIN' && <NavItem to="/sync" icon={<TrendingUp size={18} />} label="Sync" />}
     </nav>
   );
 };

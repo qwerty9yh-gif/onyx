@@ -6,6 +6,7 @@ import { api } from '../../lib/api';
 import { Navigation } from './Navigation';
 import { TopBar } from './TopBar';
 import { MobileSidebar } from './MobileSidebar';
+import { getUser } from '../../lib/auth';
 
 export const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -16,6 +17,7 @@ export const Layout: React.FC = () => {
     retry: false,
   });
   const dailyReset = useMutation({ mutationFn: () => api.post('/sales/daily-reset') });
+  const role = me?.role || getUser()?.role;
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900">
       <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
@@ -36,7 +38,7 @@ export const Layout: React.FC = () => {
           <NavLink to="/dashboard"><Home size={20} /><span>Home</span></NavLink>
           <NavLink to="/transactions"><Receipt size={20} /><span>Transactions</span></NavLink>
           <NavLink to="/sales" className="cashier-dock-sale"><ShoppingCart size={24} /><span>Sales</span></NavLink>
-          {['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(me?.role || '') && <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>}
+          {['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(role || '') && <NavLink to="/incoming"><Truck size={20} /><span>Incoming</span></NavLink>}
           <NavLink to="/settings"><Settings size={20} /><span>Settings</span></NavLink>
         </nav>
     </div>

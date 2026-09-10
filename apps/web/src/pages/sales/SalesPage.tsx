@@ -222,7 +222,7 @@ export const SalesPage: React.FC = () => {
             <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-brand-700" size={21} />
             <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product or scan barcode" autoFocus className="h-14 w-full rounded-2xl border-0 bg-red-50 pl-12 pr-4 text-lg outline-none ring-2 ring-transparent transition focus:ring-red-300" />
           </div>
-          <div className="grid max-h-[38rem] grid-cols-2 auto-rows-[8.5rem] gap-3 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-red-50/50 p-3 pr-2 shadow-xl shadow-red-950/10">
+          <div className="grid h-[18.5rem] max-h-[18.5rem] grid-cols-2 auto-rows-[8.5rem] gap-3 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-red-50/50 p-3 pr-2 shadow-xl shadow-red-950/10">
             {productsLoading && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Loading products...</div>}
             {!productsLoading && products.map((product) => (
               <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group rounded-2xl border border-red-100 bg-white p-3 text-left shadow-lg shadow-red-950/10 transition hover:-translate-y-1 hover:border-brand-500 hover:shadow-glow-red disabled:cursor-not-allowed disabled:opacity-50">
