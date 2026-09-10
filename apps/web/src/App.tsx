@@ -131,7 +131,7 @@ function App() {
             <Route path="/purchases/:id/edit" element={<PurchaseForm />} />
             <Route path="/inventory" element={<InventoryPage />} />
           </Route>
-          <Route element={<RequireRole roles={['ADMIN', 'MANAGER']} />}>
+          <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'CASHIER']} />}>
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/new" element={<CustomerForm />} />
             <Route path="/customers/:id/edit" element={<CustomerForm />} />

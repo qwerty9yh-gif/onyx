@@ -119,7 +119,7 @@ router.get('/barcode/:barcode', async (req: AuthenticatedRequest, res, next) => 
 // POST /api/customers/broadcast - Send notification to all customers (future Hubtel SMS integration)
 router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { title, message } = req.body;
     if (!message) throw new AppError('Message required', 400);
     const customers = await prisma.customer.findMany({ where: { phone: { not: null } }, select: { id: true, name: true, phone: true } });

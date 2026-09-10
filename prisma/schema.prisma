@@ -108,6 +108,7 @@ model User {
   sessions      Session[]
   devices       Device[]
   cashierSales  Sale[]              @relation("CashierSales")
+  waiterSales   Sale[]              @relation("WaiterSales")
   refunds       Refund[]            @relation("RefundCashier")
   inventoryOps  InventoryMovement[]
   auditLogs     AuditLog[]
@@ -271,7 +272,7 @@ model Sale {
   customerId     String?
   customer       Customer?         @relation(fields: [customerId], references: [id])
   waiterId       String?
-  waiter         User?             @relation(fields: [waiterId], references: [id])
+  waiter         User?             @relation("WaiterSales", fields: [waiterId], references: [id])
   customerPhone  String?
   status         TransactionStatus @default(PENDING)
   syncStatus     SyncStatus        @default(PENDING)

@@ -70,6 +70,7 @@ export interface Customer {
   name: string;
   email?: string;
   phone?: string;
+  phoneLabel?: string;
   address?: string;
   barcode?: string;
   notes?: string;
@@ -146,6 +147,7 @@ export interface Sale {
   items: SaleItem[];
   payments: Payment[];
   refund?: Refund;
+  sendInvoiceBySms?: (phone?: string) => Promise<{ success: boolean; messageId?: string; error?: string }>;
 }
 
 export interface PurchaseItem {
