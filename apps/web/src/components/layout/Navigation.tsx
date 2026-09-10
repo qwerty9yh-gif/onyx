@@ -47,14 +47,14 @@ export const Navigation: React.FC = () => {
       {!isCashier && <NavItem to="/products" icon={<Package size={18} />} label="Products" />}
       {!isCashier && <NavItem to="/purchases" icon={<ShoppingBasket size={18} />} label="Purchases" />}
       {!isCashier && <NavItem to="/inventory" icon={<Package size={18} />} label="Inventory" />}
-      {me?.role === 'ADMIN' && <NavItem to="/incoming" icon={<ShoppingBasket size={18} />} label="Incoming Goods" />}
+      <NavItem to="/incoming" icon={<ShoppingBasket size={18} />} label="Incoming Goods" />
       <NavItem to="/customers" icon={<Users size={18} />} label="Customers" />
       {!isCashier && <NavItem to="/suppliers" icon={<ShoppingBasket size={18} />} label="Suppliers" />}
       {!isCashier && <NavItem to="/categories" icon={<FileText size={18} />} label="Categories" />}
       {!isCashier && <NavItem to="/reports" icon={<FileText size={18} />} label="Reports" />}
       {!isCashier && <NavItem to="/analytics" icon={<BarChart3 size={18} />} label="Analytics" />}
       {!isCashier && <NavItem to="/users" icon={<Shield size={18} />} label="Users" />}
-      {!isCashier && <NavItem to="/settings" icon={<Settings size={18} />} label="Settings" />}
+      <NavItem to="/settings" icon={<Settings size={18} />} label="Settings" />
       {!isCashier && <NavItem to="/sync" icon={<TrendingUp size={18} />} label="Sync" />}
     </nav>
   );

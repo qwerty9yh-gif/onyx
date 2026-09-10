@@ -66,18 +66,18 @@ app.use((req, res, next) => {
 
 // API Routes
 app.get('/', (_req, res) => {
-  res.json({ name: 'ONYX POS System API', status: 'ok', health: '/api/health' });
+  res.json({ name: 'ONYX POS', status: 'ok', health: '/api/health' });
 });
 app.use('/api/auth', authRouter);
 app.use('/api/health', healthRouter);
 // Protected routes
 app.use('/api/users', authenticate, requireRole('ADMIN'), userRouter);
-app.use('/api/products', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), productRouter);
+app.use('/api/products', authenticate, productRouter);
 app.use('/api/categories', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), categoryRouter);
 app.use('/api/sales', authenticate, saleRouter);
-app.use('/api/inventory', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), inventoryRouter);
+app.use('/api/inventory', authenticate, inventoryRouter);
 app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER'), customerRouter);
-app.use('/api/suppliers', authenticate, requireRole('ADMIN', 'MANAGER'), supplierRouter);
+app.use('/api/suppliers', authenticate, supplierRouter);
 app.use('/api/purchases', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), purchaseRouter);
 app.use('/api/reports', authenticate, requireRole('ADMIN'), reportRouter);
 app.use('/api/analytics', authenticate, requireRole('ADMIN'), analyticsRouter);

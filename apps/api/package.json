@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "type": "module",
-  "description": "ONYX POS System — API server",
+  "description": "ONYX POS API server",
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "build": "tsc",

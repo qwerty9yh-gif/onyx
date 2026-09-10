@@ -35,6 +35,7 @@ export interface InvoiceData {
   tax: number;
   total: number;
   dueDate?: string;
+  status?: string;
 }
 
 const ESC = '\x1b';
@@ -83,7 +84,7 @@ function buildQrRaster(qr: { size: number; dark: (row: number, col: number) => b
 export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
   const qr = qrMatrix(`ONYX|${receipt.receiptNumber}|${receipt.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
-    text(`${ESC}@${ESC}a\x01ONYX POS SYSTEM\n`),
+    text(`${ESC}@${ESC}a\x01ONYX POS\n`),
     text(` ${ESC}a\x00${receipt.storeName}\n`),
     text(`${ESC}a\x01Receipt ${receipt.receiptNumber}\n`),
     text(`${ESC}a\x00${receipt.createdAt}\nCashier: ${receipt.cashier}${receipt.customer ? `\nCustomer: ${receipt.customer}` : ''}\n`),
@@ -106,10 +107,10 @@ export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
 export function buildEscPosInvoice(invoice: InvoiceData): Uint8Array {
   const qr = qrMatrix(`ONYX|${invoice.invoiceNumber}|${invoice.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
-    text(`${ESC}@${ESC}a\x01ONYX POS SYSTEM\n`),
+    text(`${ESC}@${ESC}a\x01ONYX POS\n`),
     text(` ${ESC}a\x00INVOICE · ${invoice.storeName}\n`),
     text(`${ESC}a\x01Invoice ${invoice.invoiceNumber}\n`),
-    text(`${ESC}a\x00${invoice.createdAt}\nCashier: ${invoice.cashier}${invoice.customer ? `\nCustomer: ${invoice.customer}` : ''}\nStatus: UNPAID ${invoice.dueDate ? ` · Due ${invoice.dueDate}` : ''}\n`),
+    text(`${ESC}a\x00${invoice.createdAt}\nCashier: ${invoice.cashier}${invoice.customer ? `\nCustomer: ${invoice.customer}` : ''}\nStatus: ${invoice.status || 'UNPAID'} ${invoice.dueDate ? ` · Due ${invoice.dueDate}` : ''}\n`),
     text('------------------------------------------\n'),
   ];
   for (const line of invoice.lines) {
@@ -140,43 +141,54 @@ function concat(chunks: Uint8Array[]): Uint8Array {
 const PRINT_STYLES = `
   * { box-sizing: border-box; }
   body { margin: 0; background: #fff; color: #111; font-family: 'Segoe UI', system-ui, sans-serif; }
-  @page { size: A4; margin: 12mm; }
-  .sheet { width: 100%; padding: 24px; }
+  @page { size: 80mm auto; margin: 4mm; }
+  .sheet { width: 72mm; padding: 2mm; }
   header { text-align: center; }
-  header h1 { font-size: 22px; letter-spacing: 2px; margin: 0; color: #b91c1c; }
-  header .meta { font-size: 14px; color: #444; margin-top: 4px; }
-  header .doc { font-size: 18px; font-weight: 800; color: #111; text-transform: uppercase; letter-spacing: 6px; margin-top: 6px; }
+  header h1 { font-size: 26px; letter-spacing: 1px; margin: 0; color: #b91c1c; }
+  header .meta { font-size: 16px; color: #222; margin-top: 4px; }
+  header .doc { font-size: 20px; font-weight: 800; color: #111; text-transform: uppercase; letter-spacing: 3px; margin-top: 6px; }
   .infos { width: 100%; margin-top: 14px; border-collapse: collapse; }
-  .infos td { padding: 3px 10px; font-size: 12px; }
+  .infos td { padding: 4px 2px; font-size: 15px; }
   .infos td:first-child { color: #777; }
   .items { width: 100%; margin-top: 14px; border-collapse: collapse; }
-  .items th { border-bottom: 2px solid #222; padding: 6px 10px; text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; }
-  .items td { border-bottom: 1px solid #ddd; padding: 6px 10px; font-size: 12px; }
+  .items th { border-bottom: 2px solid #222; padding: 7px 2px; text-align: left; font-size: 14px; text-transform: uppercase; letter-spacing: 0; }
+  .items td { border-bottom: 1px solid #ddd; padding: 7px 2px; font-size: 15px; }
   .items .c { text-align: center; }
   .items .r { text-align: right; }
-  .items .lbl { font-size: 12px; color: #333; font-weight: 600; }
+  .items .lbl { font-size: 15px; color: #111; font-weight: 700; }
   .items .sep td { border: 0; }
-  .items .grand td { font-size: 15px; font-weight: 800; border-top: 2px solid #222; }
-  .qr { text-align: center; margin: 16px 0; }
-  footer { text-align: center; font-size: 11px; color: #888; margin-top: 12px; }
+  .items .grand td { font-size: 20px; font-weight: 800; border-top: 2px solid #222; }
+  .qr { text-align: center; margin: 18px 0; }
+  footer { text-align: center; font-size: 14px; color: #222; margin-top: 14px; }
   @media print { .sheet { padding: 0; } }
 `;
 
 function printDocument(html: string, title: string): void {
   const win = window.open('', '_blank', 'width=480,height=820');
+  const documentHtml = `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title><style>${PRINT_STYLES}</style></head><body>${html}</body></html>`;
   if (!win) {
-    window.print();
+    const frame = document.createElement('iframe');
+    frame.setAttribute('title', title);
+    frame.style.position = 'fixed';
+    frame.style.width = '0';
+    frame.style.height = '0';
+    frame.style.border = '0';
+    document.body.appendChild(frame);
+    const frameDocument = frame.contentDocument;
+    if (!frameDocument) { frame.remove(); return; }
+    frameDocument.open();
+    frameDocument.write(documentHtml);
+    frameDocument.close();
+    frame.onload = () => { frame.contentWindow?.print(); window.setTimeout(() => frame.remove(), 1000); };
     return;
   }
   try {
-    win.document.write(
-      `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title><style>${PRINT_STYLES}</style></head><body>${html}</body></html>`,
-    );
+    win.document.write(documentHtml);
     win.document.close();
     win.focus();
     win.setTimeout(() => win.print(), 600);
   } catch {
-    window.print();
+    win.close();
   }
 }
 
@@ -186,7 +198,7 @@ export function printReceipt(receipt: ReceiptData): void {
   const html = `
     <div class="sheet">
       <header>
-        <h1>ONYX POS SYSTEM</h1>
+        <h1>ONYX POS</h1>
         <div class="meta">${receipt.storeName}</div>
         <div class="doc">SALES RECEIPT</div>
       </header>
@@ -211,7 +223,7 @@ export function printReceipt(receipt: ReceiptData): void {
         </tbody>
       </table>
       <div class="qr"><img src="${qr}" alt="QR" width="120" height="120" /></div>
-      <footer>Thank you for choosing ONYX POS System</footer>
+      <footer>Thank you for choosing ONYX POS</footer>
     </div>`;
   printDocument(html, `Receipt ${receipt.receiptNumber}`);
 }
@@ -222,7 +234,7 @@ export function printInvoice(invoice: InvoiceData): void {
   const html = `
     <div class="sheet">
       <header>
-        <h1>ONYX POS SYSTEM</h1>
+        <h1>ONYX POS</h1>
         <div class="meta">${invoice.storeName}</div>
         <div class="doc">INVOICE</div>
       </header>
@@ -246,7 +258,7 @@ export function printInvoice(invoice: InvoiceData): void {
         </tbody>
       </table>
       <div class="qr"><img src="${qr}" alt="QR" width="120" height="120" /></div>
-      <footer>This invoice can be reopened and marked as paid.<br/>Thank you for choosing ONYX POS System</footer>
+      <footer>This invoice can be reopened and marked as paid.<br/>Thank you for choosing ONYX POS</footer>
     </div>`;
   printDocument(html, `Invoice ${invoice.invoiceNumber}`);
 }

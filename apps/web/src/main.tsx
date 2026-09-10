@@ -6,7 +6,7 @@ import App from './App';
 import { initAuth, clearToken } from './lib/auth';
 import './index.css';
 
-const APP_NAME = 'ONYX POS System';
+const APP_NAME = 'ONYX POS';
 
 initAuth();
 

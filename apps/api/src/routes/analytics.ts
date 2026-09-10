@@ -86,4 +86,23 @@ router.get('/inventory-summary', async (req: AuthenticatedRequest, res, next) =>
   } catch (err) { next(err); }
 });
 
+// GET /api/analytics/sales-trend - Daily completed-sale totals for charts.
+router.get('/sales-trend', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const days = Math.min(Math.max(parseInt(req.query.days as string) || 7, 2), 31);
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+    start.setDate(start.getDate() - (days - 1));
+    const sales = await prisma.sale.findMany({ where: { status: 'COMPLETED', createdAt: { gte: start } }, select: { createdAt: true, total: true } });
+    const trend = Array.from({ length: days }, (_, index) => {
+      const date = new Date(start);
+      date.setDate(start.getDate() + index);
+      const key = date.toISOString().slice(0, 10);
+      const matching = sales.filter((sale) => sale.createdAt.toISOString().slice(0, 10) === key);
+      return { date: key, sales: matching.length, revenue: matching.reduce((sum, sale) => sum + sale.total, 0) };
+    });
+    res.json({ success: true, data: trend });
+  } catch (err) { next(err); }
+});
+
 export { router as analyticsRouter };

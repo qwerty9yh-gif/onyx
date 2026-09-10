@@ -13,6 +13,9 @@ interface InventorySummary {
   totalCostValue: number;
 }
 
+interface TrendPoint { date: string; sales: number; revenue: number }
+interface PaymentSummary { method: string; _sum: { amount: number | null } }
+
 export const AnalyticsPage: React.FC = () => {
   const { data: sales } = useQuery<Record<string, unknown>>({
     queryKey: ['analytics-sales-summary'],
@@ -28,6 +31,12 @@ export const AnalyticsPage: React.FC = () => {
     queryKey: ['dashboard'],
     queryFn: () => api.get('/analytics/dashboard').then((res) => res.data.data),
   });
+  const { data: trend = [] } = useQuery<TrendPoint[]>({
+    queryKey: ['analytics-sales-trend'],
+    queryFn: () => api.get('/analytics/sales-trend', { params: { days: 7 } }).then((res) => res.data.data),
+  });
+  const paymentSummary = (sales?.byPayment as PaymentSummary[] | undefined) || [];
+  const maxRevenue = Math.max(...trend.map((point) => point.revenue), 1);
 
   const fmt = (n: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(n || 0);
 
@@ -65,6 +74,24 @@ export const AnalyticsPage: React.FC = () => {
           </dl>
         </div>
       </div>
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <section className="rounded-lg bg-white p-6 shadow">
+          <h2 className="mb-4 text-lg font-semibold">Sales trend</h2>
+          <svg viewBox="0 0 700 220" className="h-56 w-full" role="img" aria-label="Seven day sales revenue trend">
+            <polyline fill="none" stroke="#dc2626" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round" points={trend.map((point, index) => `${index * (680 / Math.max(trend.length - 1, 1)) + 10},${205 - (point.revenue / maxRevenue) * 180}`).join(' ')} />
+            {trend.map((point, index) => <circle key={point.date} cx={index * (680 / Math.max(trend.length - 1, 1)) + 10} cy={205 - (point.revenue / maxRevenue) * 180} r="5" fill="#dc2626"><title>{point.date}: {fmt(point.revenue)}</title></circle>)}
+          </svg>
+          <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-gray-500">{trend.map((point) => <span key={point.date}>{point.date.slice(5)}</span>)}</div>
+        </section>
+        <section className="rounded-lg bg-white p-6 shadow">
+          <h2 className="mb-4 text-lg font-semibold">Payment mix</h2>
+          <div className="flex flex-wrap items-center gap-6"><div className="h-36 w-36 rounded-full" style={{ background: `conic-gradient(${paymentSummary.map((item, index) => { const total = paymentSummary.reduce((sum, entry) => sum + (entry._sum.amount || 0), 0) || 1; const start = paymentSummary.slice(0, index).reduce((sum, entry) => sum + (entry._sum.amount || 0), 0) / total * 100; const end = start + ((item._sum.amount || 0) / total * 100); const color = ['#dc2626', '#0284c7', '#059669', '#d97706', '#7c3aed'][index % 5]; return `${color} ${start}% ${end}%`; }).join(', ')})` }} aria-label="Payment method breakdown" role="img" /> <div className="space-y-2">{paymentSummary.map((item, index) => <div key={item.method} className="flex items-center gap-2 text-sm"><span className="h-3 w-3 rounded-full" style={{ backgroundColor: ['#dc2626', '#0284c7', '#059669', '#d97706', '#7c3aed'][index % 5] }} />{item.method}: {fmt(item._sum.amount || 0)}</div>)}</div></div>
+          {!paymentSummary.length && <p className="text-sm text-gray-500">No payment data yet.</p>}
+        </section>
+      </div>
+
+      <section className="rounded-lg bg-white p-6 shadow"><h2 className="mb-4 text-lg font-semibold">Daily sales volume</h2><div className="flex h-44 items-end gap-3">{trend.map((point) => <div key={point.date} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t bg-sky-600" style={{ height: `${Math.max((point.sales / Math.max(...trend.map((entry) => entry.sales), 1)) * 140, point.sales ? 8 : 2)}px` }} title={`${point.sales} sales`} /><span className="text-[10px] text-gray-500">{point.date.slice(5)}</span></div>)}</div></section>
 
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold mb-4">Top Products (All Time)</h2>

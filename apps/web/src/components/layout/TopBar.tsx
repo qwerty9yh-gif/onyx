@@ -26,11 +26,11 @@ export const TopBar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
 
   return (
     <header className="flex items-center justify-between h-14 px-4 bg-white border-b border-gray-200">
-      <button onClick={onMenuClick} className="p-2 rounded-md md:hidden hover:bg-gray-100">
+      {me?.role === 'ADMIN' ? <button onClick={onMenuClick} className="p-2 rounded-md md:hidden hover:bg-gray-100">
         <Menu size={20} />
-      </button>
+      </button> : <span className="w-9" aria-hidden="true" />}
       <div className="flex-1 px-4">
-        <h1 className="text-lg font-semibold text-gray-800">ONYX POS System</h1>
+        <h1 className="text-lg font-semibold text-gray-800">ONYX POS</h1>
       </div>
       <div className="flex items-center gap-4">
         {me && (

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { generateLocalId } from '../utils/helpers.js';
 
 const router = Router();
 
@@ -51,6 +52,45 @@ router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
     ]);
     await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'STOCK_IN', entity: 'inventory', entityId: productId, details: { productId, quantity, newStock, unitPrice: unitPriceFinal, supplierId, purchaseOrder } } });
     res.json({ success: true, data: { productId, previousStock: product.stockQuantity, newStock, quantity, unitPrice: unitPriceFinal }, message: 'Stock added' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/inventory/receive - Record a simple incoming-goods receipt.
+router.post('/receive', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    const { supplierId, productId, quantity } = req.body;
+    const parsedQuantity = Number(quantity);
+    if (!supplierId || !productId || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {
+      throw new AppError('Supplier, product, and a positive quantity are required', 400);
+    }
+    const [supplier, product] = await Promise.all([
+      prisma.supplier.findUnique({ where: { id: supplierId } }),
+      prisma.product.findUnique({ where: { id: productId } }),
+    ]);
+    if (!supplier) throw new AppError('Supplier not found', 404);
+    if (!product) throw new AppError('Product not found', 404);
+    const now = new Date();
+    const orderNumber = `IN-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    const result = await prisma.$transaction(async (tx) => {
+      const purchase = await tx.purchase.create({
+        data: {
+          supplierId,
+          status: 'RECEIVED',
+          subtotal: product.costPrice * parsedQuantity,
+          total: product.costPrice * parsedQuantity,
+          orderNumber,
+          localId: generateLocalId(),
+          items: { create: [{ productId, quantity: parsedQuantity, unitPrice: product.costPrice, subtotal: product.costPrice * parsedQuantity, total: product.costPrice * parsedQuantity }] },
+        },
+      });
+      const updatedProduct = await tx.product.update({ where: { id: productId }, data: { stockQuantity: { increment: parsedQuantity } } });
+      await tx.inventoryMovement.create({
+        data: { productId, userId: req.user!.id, type: 'STOCK_IN', quantity: parsedQuantity, unitPrice: product.costPrice, previousStock: product.stockQuantity, newStock: updatedProduct.stockQuantity, reason: 'Incoming goods', referenceId: purchase.id },
+      });
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'RECEIVE_INCOMING_GOODS', entity: 'purchase', entityId: purchase.id, details: { supplierId, productId, quantity: parsedQuantity } } });
+      return { purchase, product: updatedProduct };
+    });
+    res.status(201).json({ success: true, data: result, message: 'Incoming goods saved' });
   } catch (err) { next(err); }
 });
 

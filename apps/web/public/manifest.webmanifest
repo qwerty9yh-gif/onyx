@@ -1,8 +1,8 @@
 {
   "id": "/onyx/",
-  "name": "ONYX POS System",
+  "name": "ONYX POS",
   "short_name": "ONYX POS",
-  "description": "ONYX POS System — premium point of sale, inventory, invoicing and analytics.",
+  "description": "ONYX POS — point of sale, inventory, invoicing and analytics.",
   "lang": "en",
   "start_url": "/onyx/",
   "scope": "/onyx/",

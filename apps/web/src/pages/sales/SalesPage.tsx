@@ -1,7 +1,7 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Banknote, CreditCard, CheckCircle, FileText, Minus, Plus, Printer, Search, ShoppingCart, Trash2, Wifi, WifiOff } from 'lucide-react';
-import { api } from '../../lib/api';
+import { api, handleApiError } from '../../lib/api';
 import type { Product, Sale, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { clearCart, loadCart, loadProducts, loadQueue, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
@@ -26,7 +26,9 @@ export const SalesPage: React.FC = () => {
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [online, setOnline] = useState(navigator.onLine);
-  const [lastSale, setLastSale] = useState<Sale | null>(null);
+  const [toast, setToast] = useState('');
+  const [printPrompt, setPrintPrompt] = useState<ReceiptData | null>(null);
+  const cartRef = useRef<HTMLElement>(null);
   const queryClient = useQueryClient();
 
   const { data: me } = useQuery<User>({
@@ -88,6 +90,9 @@ export const SalesPage: React.FC = () => {
       return [...current, { productId: product.id, name: product.name, sku: product.sku, unitPrice: product.sellingPrice, quantity: 1, taxRate: product.taxRate || 0 }];
     });
     setSearch('');
+    setToast(`Added ${product.name} to cart`);
+    window.setTimeout(() => setToast(''), 2400);
+    window.setTimeout(() => cartRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' }), 0);
   };
 
   const updateQuantity = (productId: string, amount: number) => {
@@ -99,7 +104,7 @@ export const SalesPage: React.FC = () => {
   };
 
   const buildReceiptData = (receiptNumber: string, markPaid: boolean): ReceiptData => ({
-    storeName: 'ONYX POS System',
+    storeName: 'ONYX POS',
     receiptNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),
@@ -114,7 +119,7 @@ export const SalesPage: React.FC = () => {
   });
 
   const buildInvoiceData = (invoiceNumber: string): InvoiceData => ({
-    storeName: 'ONYX POS System',
+    storeName: 'ONYX POS',
     invoiceNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),
@@ -128,6 +133,7 @@ export const SalesPage: React.FC = () => {
   const markPaidMutation = useMutation({
     mutationFn: async () => {
       const payload = {
+        idempotencyKey: crypto.randomUUID(),
         items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'percentage' })),
         paymentMethod,
         amountReceived: received,
@@ -143,7 +149,7 @@ export const SalesPage: React.FC = () => {
     onSuccess: (res) => {
       const receiptNumber = res.receiptNumber;
       if (!receiptNumber.startsWith('OFF-')) {
-        printReceipt(buildReceiptData(receiptNumber, true));
+        setPrintPrompt(buildReceiptData(receiptNumber, true));
       }
       clearCart();
       setCart([]);
@@ -158,6 +164,7 @@ export const SalesPage: React.FC = () => {
   const saveUnpaidMutation = useMutation({
     mutationFn: async () => {
       const payload = {
+        idempotencyKey: crypto.randomUUID(),
         items: cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'percentage' })),
         paymentMethod,
         amountReceived: 0,
@@ -172,9 +179,6 @@ export const SalesPage: React.FC = () => {
     },
     onSuccess: (res) => {
       const receiptNumber = res.receiptNumber;
-      if (!receiptNumber.startsWith('OFF-')) {
-        printInvoice(buildInvoiceData(receiptNumber));
-      }
       clearCart();
       setCart([]);
       setAmountReceived('');
@@ -198,6 +202,8 @@ export const SalesPage: React.FC = () => {
         </div>
       </header>
 
+      {toast && <div className="fixed right-4 top-20 z-40 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{toast}</div>}
+
       <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
         <section className="space-y-4">
           <div className="relative rounded-3xl border border-white/80 bg-white/75 p-4 shadow-xl shadow-slate-200/60 backdrop-blur-xl">
@@ -206,7 +212,7 @@ export const SalesPage: React.FC = () => {
           </div>
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4">
             {productsLoading && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Loading products...</div>}
-            {!productsLoading && products.map((product) => (
+            {!productsLoading && products.slice(0, 4).map((product) => (
               <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group min-h-36 rounded-3xl border border-white/80 bg-white/80 p-4 text-left shadow-lg shadow-slate-200/50 transition hover:-translate-y-1 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50">
                 <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><ShoppingCart size={20} /></span>
                 <span className="block truncate font-bold text-slate-800">{product.name}</span>
@@ -217,7 +223,7 @@ export const SalesPage: React.FC = () => {
           </div>
         </section>
 
-        <aside className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-2xl shadow-slate-300/40 backdrop-blur-xl">
+        <aside ref={cartRef} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-2xl shadow-slate-300/40 backdrop-blur-xl">
           <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-semibold text-sky-700">Current order</p><h2 className="text-2xl font-bold">Cart <span className="text-slate-400">({cart.length})</span></h2></div><button type="button" onClick={() => { clearCart(); setCart([]); }} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button></div>
           <div className="mb-5 max-h-[38vh] space-y-3 overflow-y-auto pr-1">
             {cart.map((item) => <div key={item.productId} className="rounded-2xl bg-sky-50/80 p-3"><div className="flex justify-between gap-3"><div><p className="font-semibold text-slate-800">{item.name}</p><p className="text-xs text-slate-500">{money(item.unitPrice)} each</p></div><strong>{money(item.unitPrice * item.quantity)}</strong></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={() => updateQuantity(item.productId, -1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Minus size={16} /></button><span className="min-w-8 text-center font-bold">{item.quantity}</span><button type="button" onClick={() => updateQuantity(item.productId, 1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Plus size={16} /></button></div></div>)}
@@ -231,10 +237,23 @@ export const SalesPage: React.FC = () => {
             <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total} onClick={() => markPaidMutation.mutate()}><CheckCircle className="mr-2" size={20} />Mark as Paid</Button>
             <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600" loading={saveUnpaidMutation.isPending} disabled={!cart.length} onClick={() => saveUnpaidMutation.mutate()}><FileText className="mr-2" size={20} />Save as Unpaid</Button>
           </div>
-          {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">Sale could not be completed. It remains in your cart.</p>}
-          {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">Invoice could not be saved. It remains in your cart.</p>}
+          {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(markPaidMutation.error)} Cart was not cleared.</p>}
+          {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(saveUnpaidMutation.error)} Cart was not cleared.</p>}
         </aside>
       </div>
+
+      {printPrompt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4" role="dialog" aria-modal="true" aria-labelledby="print-receipt-title">
+          <div className="w-full max-w-sm rounded-3xl bg-white p-6 shadow-2xl">
+            <h2 id="print-receipt-title" className="text-xl font-bold text-slate-900">Print Receipt?</h2>
+            <p className="mt-2 text-sm text-slate-500">Payment saved for {printPrompt.receiptNumber}.</p>
+            <div className="mt-6 grid grid-cols-2 gap-3">
+              <Button className="rounded-2xl bg-sky-600 hover:bg-sky-700" onClick={() => { printReceipt(printPrompt); setPrintPrompt(null); }}><Printer className="mr-2" size={18} />Print Receipt</Button>
+              <Button variant="outline" className="rounded-2xl" onClick={() => setPrintPrompt(null)}>Not now</Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

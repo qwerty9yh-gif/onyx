@@ -144,8 +144,8 @@ return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 py-8">
       <div className="w-full max-w-5xl">
         <div className="flex flex-col items-center mb-8 animate-slide-up">
-          <img src={`${base}icons/icon-144.png`} alt="ONYX POS System icon" className="w-20 h-20 rounded-3xl shadow-glow-red mx-auto" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
-          <h1 className="mt-3 text-4xl font-extrabold tracking-tight onyx-text-gradient">ONYX POS System</h1>
+          <img src={`${base}icons/icon-144.png`} alt="ONYX POS icon" className="w-20 h-20 rounded-3xl shadow-glow-red mx-auto" onError={(e) => (e.currentTarget as HTMLImageElement).style.display = 'none'} />
+          <h1 className="mt-3 text-4xl font-extrabold tracking-tight onyx-text-gradient">ONYX POS</h1>
           <p className="text-slate-500 text-sm uppercase tracking-[0.28em] mt-2">Tap your card to sign in</p>
         </div>
 
@@ -180,7 +180,7 @@ return (
         )}
 
         <p className="text-center text-xs text-slate-400 mt-8">
-          © {new Date().getFullYear()} ONYX POS System · Premium point of sale
+          © {new Date().getFullYear()} ONYX POS · Premium point of sale
         </p>
       </div>
 
