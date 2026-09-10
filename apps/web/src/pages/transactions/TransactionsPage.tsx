@@ -61,7 +61,7 @@ export const TransactionsPage: React.FC = () => {
         <button type="button" key={sale.id} onClick={() => open(sale)} className="onyx-layered-card w-full rounded-2xl border border-red-100 bg-white p-4 text-left shadow-md shadow-red-950/10 backdrop-blur-xl transition hover:-translate-y-0.5 hover:shadow-glow-red">
           <div className="flex items-start justify-between gap-3"><div className="flex items-center gap-3"><span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-red-100 text-brand-700"><Receipt size={19} /></span><div><p className="font-bold text-slate-800">{sale.receiptNumber}</p><p className="text-xs text-slate-500">{sale.customer?.name || 'Walk-in customer'}</p></div></div><strong className="text-lg text-slate-900">{money(sale.total)}</strong></div>
           <div className="mt-4 flex flex-wrap items-center justify-between gap-2 text-sm text-slate-500"><span>{sale.items?.reduce((count, item) => count + item.quantity, 0) || 0} items · {sale.paymentMethod}</span><span>{new Date(sale.createdAt).toLocaleString()}</span></div>
-          <div className="mt-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${isPaid(sale) ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>{isPaid(sale) ? 'Paid' : 'Unpaid'}</span></div>
+          <div className="mt-3"><span className={`rounded-full px-3 py-1 text-xs font-bold ${isPaid(sale) ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-brand-700'}`}>{isPaid(sale) ? 'Paid' : 'Unpaid'}</span></div>
         </button>
       )) : <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-slate-500">No {title.toLowerCase()} yet.</div>}
     </section>
