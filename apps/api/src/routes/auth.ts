@@ -14,7 +14,7 @@ router.get('/users', async (_req, res, next) => {
   try {
     const users = await prisma.user.findMany({
       where: { status: 'ACTIVE', deletedAt: null },
-      select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, avatar: true, lastLogin: true },
+      select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, mustChangePassword: true, avatar: true, lastLogin: true },
       orderBy: [{ role: 'asc' }, { firstName: 'asc' }],
     });
     res.json({ success: true, data: users });
@@ -38,13 +38,13 @@ router.post('/card-login', async (req, res, next) => {
     const deviceToken = signToken({ deviceId, type: 'device' }, '30d');
     await prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });
     await prisma.auditLog.create({ data: { userId: user.id, action: 'LOGIN', entity: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
-    res.json({ success: true, data: { user: { id: user.id, email: user.email, username: user.username, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status }, token, deviceToken, deviceId: device.id, expiresAt } });
+    res.json({ success: true, data: { user: { id: user.id, email: user.email, username: user.username, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status, mustChangePassword: user.mustChangePassword }, token, deviceToken, deviceId: device.id, expiresAt } });
   } catch (err) { next(err); }
 });
 
 router.get('/me', authenticate, async (req: AuthenticatedRequest, res, next) => {
   try {
-    const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, avatar: true, lastLogin: true, createdAt: true } });
+    const u = await prisma.user.findUnique({ where: { id: req.user!.id }, select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, mustChangePassword: true, phone: true, avatar: true, lastLogin: true, createdAt: true } });
     if (!u) throw new AppError('Not found', 404);
     res.json({ success: true, data: u });
   } catch (err) { next(err); }
@@ -81,7 +81,7 @@ router.post('/change-password', authenticate, async (req: AuthenticatedRequest, 
     const ok = await verifyPassword(currentPassword, user.passwordHash);
     if (!ok) throw new AppError('Current password incorrect', 401);
     const hash = await hashPassword(newPassword);
-    await prisma.user.update({ where: { id: req.user!.id }, data: { passwordHash: hash } });
+    await prisma.user.update({ where: { id: req.user!.id }, data: { passwordHash: hash, mustChangePassword: false } });
     await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CHANGE_PASSWORD', entity: 'user', entityId: req.user!.id, ipAddress: req.ip } });
     res.json({ success: true, message: 'Password changed' });
   } catch (err) { next(err); }

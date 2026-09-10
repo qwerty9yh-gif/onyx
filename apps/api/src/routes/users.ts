@@ -13,7 +13,7 @@ const createUserSchema = z.object({
   password: z.string().min(8),
   firstName: z.string().min(1),
   lastName: z.string().min(1),
-  role: z.enum(['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF']).default('CASHIER'),
+  role: z.enum(['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER', 'INVENTORY_STAFF']).default('CASHIER'),
   phone: z.string().optional(),
   status: z.enum(['ACTIVE', 'DISABLED', 'INVITED']).default('ACTIVE'),
 });
@@ -38,7 +38,7 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
     const [users, total] = await Promise.all([
       prisma.user.findMany({
         where,
-        select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, phone: true, lastLogin: true, createdAt: true },
+        select: { id: true, email: true, username: true, firstName: true, lastName: true, role: true, status: true, mustChangePassword: true, phone: true, lastLogin: true, createdAt: true },
         orderBy: { createdAt: 'desc' },
         skip: (p - 1) * l,
         take: l,

@@ -120,7 +120,7 @@ router.get('/barcode/:barcode', async (req: AuthenticatedRequest, res, next) => 
 // POST /api/customers/broadcast - Send an SMS announcement to all customers with phones
 router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { title, message } = req.body;
     if (!message) throw new AppError('Message required', 400);
     const customers = await prisma.customer.findMany({ where: { phone: { not: null } }, select: { id: true, name: true, phone: true } });
@@ -145,7 +145,7 @@ router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/customers/:id/message - Send a single SMS to one customer
 router.post('/:id/message', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { title, message } = req.body;
     if (!message) throw new AppError('Message required', 400);
     const customer = await prisma.customer.findUnique({ where: { id: req.params.id } });

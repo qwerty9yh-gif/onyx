@@ -20,6 +20,7 @@ import { syncRouter } from './routes/sync.js';
 import { settingsRouter } from './routes/settings.js';
 import { healthRouter } from './routes/health.js';
 import { maintenanceRouter } from './routes/maintenance.js';
+import { adminRouter } from './routes/admin.js';
 import { prisma } from './utils/prisma.js';
 import { hashPassword } from './utils/helpers.js';
 
@@ -74,13 +75,14 @@ app.use('/api/products', authenticate, productRouter);
 app.use('/api/categories', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), categoryRouter);
 app.use('/api/sales', authenticate, saleRouter);
 app.use('/api/inventory', authenticate, inventoryRouter);
-app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER', 'CASHIER'), customerRouter);
+app.use('/api/customers', authenticate, requireRole('ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'), customerRouter);
 app.use('/api/suppliers', authenticate, supplierRouter);
 app.use('/api/purchases', authenticate, requireRole('ADMIN', 'MANAGER', 'INVENTORY_STAFF'), purchaseRouter);
 app.use('/api/reports', authenticate, requireRole('ADMIN'), reportRouter);
 app.use('/api/analytics', authenticate, requireRole('ADMIN'), analyticsRouter);
 app.use('/api/sync', authenticate, requireRole('ADMIN'), syncRouter);
 app.use('/api/settings', authenticate, requireRole('ADMIN'), settingsRouter);
+app.use('/api/admin', authenticate, requireRole('ADMIN'), adminRouter);
 
 // Error handling
 app.use(errorHandler);

@@ -41,7 +41,7 @@ const settingsNavItems: SettingsNavItem[] = [
   { to: '/categories', icon: FileText, label: 'Categories', description: 'Organize products into categories', roles: ['ADMIN', 'MANAGER'] },
   { to: '/reports', icon: FileText, label: 'Reports', description: 'Generate and view business reports', roles: ['ADMIN'] },
   { to: '/analytics', icon: BarChart3, label: 'Analytics', description: 'Advanced analytics and data insights', roles: ['ADMIN'] },
-  { to: '/users', icon: Users, label: 'Users', description: 'Manage user accounts and permissions', roles: ['ADMIN'] },
+  { to: '/users', icon: Users, label: 'Worker Management', description: 'View workers and reset temporary passwords', roles: ['ADMIN'] },
   { to: '/sync', icon: TrendingUp, label: 'Sync', description: 'Synchronize offline data with the server', roles: ['ADMIN'] },
 ];
 

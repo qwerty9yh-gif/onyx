@@ -3,16 +3,23 @@ import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
-// Default ONYX POS administrator account (idempotent upsert).
+// Default ONYX POS accounts (idempotent upsert).
 const defaultUsers: Array<{
   email: string;
   username: string;
   firstName: string;
   lastName: string;
-  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'INVENTORY_STAFF';
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'WORKER' | 'WAITER' | 'INVENTORY_STAFF';
   password: string;
+  mustChangePassword: boolean;
 }> = [
-  { email: 'qwerty9yh@gmail.com', username: 'Admin k', firstName: 'ONYX', lastName: 'Administrator', role: 'ADMIN', password: '123456789' },
+  { email: 'qwerty9yh@gmail.com', username: 'Admin k', firstName: 'ONYX', lastName: 'Administrator', role: 'ADMIN', password: '123456789', mustChangePassword: false },
+  { email: 'helena@onyxlounge.local', username: 'helena', firstName: 'Helena', lastName: 'Worker', role: 'WORKER', password: '123456789H', mustChangePassword: true },
+  { email: 'frank@onyxlounge.local', username: 'frank', firstName: 'Frank', lastName: 'Worker', role: 'WAITER', password: '123456789F', mustChangePassword: true },
+  { email: 'joy@onyxlounge.local', username: 'joy', firstName: 'Joy', lastName: 'Worker', role: 'WAITER', password: '123456789J', mustChangePassword: true },
+  { email: 'dora@onyxlounge.local', username: 'dora', firstName: 'Dora', lastName: 'Worker', role: 'WAITER', password: '123456789D', mustChangePassword: true },
+  { email: 'aishat@onyxlounge.local', username: 'aishat', firstName: 'Aishat', lastName: 'Worker', role: 'WAITER', password: '123456789A', mustChangePassword: true },
+  { email: 'santos@onyxlounge.local', username: 'santos', firstName: 'Santos', lastName: 'Worker', role: 'WAITER', password: '123456789S', mustChangePassword: true },
 ];
 
 async function seedUsers() {
@@ -20,11 +27,11 @@ async function seedUsers() {
     const passwordHash = await bcrypt.hash(u.password, 12);
     await prisma.user.upsert({
       where: { email: u.email },
-      update: { username: u.username, role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash },
-      create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash },
+      update: { username: u.username, role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash, mustChangePassword: u.mustChangePassword, deletedAt: null },
+      create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash, mustChangePassword: u.mustChangePassword },
     });
   }
-  console.log('ONYX admin account ready: qwerty9yh@gmail.com');
+  console.log(`ONYX accounts ready: ${defaultUsers.length}`);
 }
 
 type CatalogItem = [name: string, price: number | null];

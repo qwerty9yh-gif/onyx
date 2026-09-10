@@ -8,7 +8,7 @@ import { Input } from '../../components/ui/Input';
 import { Modal } from '../../components/ui/Modal';
 import type { User } from '../../lib/types';
 
-const ROLES = ['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF'] as const;
+const ROLES = ['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER', 'INVENTORY_STAFF'] as const;
 
 interface NewUserForm {
   email: string;
@@ -30,11 +30,16 @@ export const UsersPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NewUserForm>(EMPTY_FORM);
+  const [notice, setNotice] = useState('');
   const queryClient = useQueryClient();
 
   const { data } = useQuery({
     queryKey: ['users', page, search],
     queryFn: () => api.get('/users', { params: { page, limit: 20, search: search || undefined } }).then((res) => res.data),
+  });
+  const { data: workers = [] } = useQuery<User[]>({
+    queryKey: ['admin-workers'],
+    queryFn: () => api.get('/admin/workers').then((res) => res.data.data),
   });
 
   const createMutation = useMutation({
@@ -50,6 +55,24 @@ export const UsersPage: React.FC = () => {
     mutationFn: (id: string) => api.delete(`/users/${id}`),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
   });
+
+  const resetPasswordMutation = useMutation({
+    mutationFn: ({ id, payload }: { id: string; payload: { restoreDefault?: boolean; temporaryPassword?: string } }) => api.post(`/admin/workers/${id}/reset-password`, payload),
+    onSuccess: () => {
+      setNotice('Worker password reset successfully. The worker must change it at next login.');
+      queryClient.invalidateQueries({ queryKey: ['admin-workers'] });
+    },
+  });
+
+  const resetWorkerPassword = (worker: User) => {
+    const restoreDefault = window.confirm(`Reset ${worker.firstName}'s password to the default format?`);
+    if (restoreDefault) {
+      resetPasswordMutation.mutate({ id: worker.id, payload: { restoreDefault: true } });
+      return;
+    }
+    const temporaryPassword = window.prompt(`Enter a temporary password for ${worker.firstName} (minimum 8 characters):`);
+    if (temporaryPassword) resetPasswordMutation.mutate({ id: worker.id, payload: { temporaryPassword } });
+  };
 
   const set = (patch: Partial<NewUserForm>) => setForm((prev) => ({ ...prev, ...patch }));
 
@@ -96,6 +119,31 @@ export const UsersPage: React.FC = () => {
         </div>
         <Button onClick={() => setModalOpen(true)} variant="primary">Add User</Button>
       </div>
+
+      <section className="rounded-3xl border border-red-100 bg-white/90 p-5 shadow-lg shadow-red-950/10">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-bold text-slate-900">Worker Management</h2>
+            <p className="text-sm text-slate-500">Active worker accounts and password controls</p>
+          </div>
+          {notice && <p className="text-sm font-semibold text-emerald-700">{notice}</p>}
+        </div>
+        <div className="mt-4 divide-y divide-slate-100">
+          {workers.map((worker) => (
+            <div key={worker.id} className="flex flex-wrap items-center justify-between gap-3 py-3">
+              <div>
+                <p className="font-semibold text-slate-900">{worker.firstName} {worker.lastName} <span className="font-normal text-slate-500">@{worker.username}</span></p>
+                <p className="text-sm text-slate-500">{worker.email}</p>
+              </div>
+              <div className="flex items-center gap-3">
+                <Badge variant={worker.status === 'ACTIVE' ? 'success' : 'danger'}>{worker.status}</Badge>
+                <Button variant="outline" onClick={() => resetWorkerPassword(worker)} loading={resetPasswordMutation.isPending}>Reset Password</Button>
+              </div>
+            </div>
+          ))}
+          {workers.length === 0 && <p className="py-4 text-sm text-slate-500">No worker accounts found.</p>}
+        </div>
+      </section>
 
       <Input placeholder="Search users..." value={search} onChange={(e) => setSearch(e.target.value)} />
 

@@ -11,7 +11,7 @@ interface LoginUser {
   username: string;
   firstName: string;
   lastName: string;
-  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'INVENTORY_STAFF';
+  role: 'ADMIN' | 'MANAGER' | 'CASHIER' | 'WORKER' | 'WAITER' | 'INVENTORY_STAFF';
   status: 'ACTIVE' | 'DISABLED' | 'INVITED';
   avatar?: string | null;
   lastLogin?: string | null;
@@ -21,6 +21,8 @@ const ROLE_LABEL: Record<string, string> = {
   ADMIN: 'Administrator',
   MANAGER: 'Manager',
   CASHIER: 'Cashier',
+  WORKER: 'Worker',
+  WAITER: 'Waiter',
   INVENTORY_STAFF: 'Inventory Staff',
 };
 
@@ -28,12 +30,16 @@ const ROLE_TONE: Record<string, string> = {
   ADMIN: 'bg-brand-700 text-white shadow-glow-red',
   MANAGER: 'bg-red-100 text-brand-700',
   CASHIER: 'bg-white border border-red-200 text-brand-700',
+  WORKER: 'bg-white border border-red-200 text-brand-700',
+  WAITER: 'bg-white border border-red-200 text-brand-700',
   INVENTORY_STAFF: 'bg-red-50 text-brand-700',
 };
 
 function homeFor(role: string): string {
   switch (role) {
-    case 'CASHIER': return '/sales';
+    case 'CASHIER':
+    case 'WORKER': return '/sales';
+    case 'WAITER': return '/sales';
     case 'INVENTORY_STAFF': return '/inventory';
     default: return '/dashboard';
   }
@@ -73,14 +79,14 @@ export const LoginPage: React.FC = () => {
       console.log('[ONYX LOGIN] Login response status: 200 OK');
       console.log('[ONYX LOGIN] Token stored successfully:', !!getToken());
       console.log('[ONYX LOGIN] User authenticated:', user?.email);
-      const dest = from || homeFor(selected.role);
+      const dest = user.mustChangePassword ? '/change-password' : (from || homeFor(selected.role));
       console.log('[ONYX LOGIN] Redirecting to:', dest);
       queryClient.setQueryData(['me'], user);
       setBusy(false);
       setSelected(null);
       setPassword('');
       setError('');
-      navigate(dest, { replace: true });
+      navigate(dest, { replace: true, state: user.mustChangePassword ? { from: { pathname: from || homeFor(selected.role) } } : undefined });
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number } };
       const status = axiosErr?.response?.status;

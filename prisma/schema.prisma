@@ -17,6 +17,8 @@ enum Role {
   ADMIN
   MANAGER
   CASHIER
+  WORKER
+  WAITER
   INVENTORY_STAFF
 }
 
@@ -98,6 +100,7 @@ model User {
   lastName      String
   role          Role     @default(CASHIER)
   status        UserStatus @default(INVITED)
+  mustChangePassword Boolean @default(false)
   phone         String?           @unique
   avatar        String?
   lastLogin     DateTime?

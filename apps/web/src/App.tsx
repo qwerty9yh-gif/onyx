@@ -27,6 +27,7 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 import { SyncPage } from './pages/SyncPage';
 import { TransactionsPage } from './pages/transactions/TransactionsPage';
 import { IncomingPage } from './pages/incoming/IncomingPage';
+import { ChangePasswordPage } from './pages/auth/ChangePasswordPage';
 
 const RequireAuth = () => {
   const location = useLocation();
@@ -102,7 +103,7 @@ const RequireRole: React.FC<{ roles: UserRole[] }> = ({ roles }) => {
   }
 
   if (!roles.includes(user.role)) {
-    return <Navigate to={user.role === 'CASHIER' ? '/sales' : '/dashboard'} replace />;
+    return <Navigate to={user.role === 'CASHIER' || user.role === 'WORKER' || user.role === 'WAITER' ? '/sales' : '/dashboard'} replace />;
   }
 
   return <Outlet />;
@@ -116,6 +117,7 @@ function App() {
         <Route element={<Layout />}>
           <Route path="/" element={<Navigate to="/dashboard" replace />} />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/change-password" element={<ChangePasswordPage />} />
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/incoming" element={<IncomingPage />} />
@@ -131,7 +133,7 @@ function App() {
             <Route path="/purchases/:id/edit" element={<PurchaseForm />} />
             <Route path="/inventory" element={<InventoryPage />} />
           </Route>
-          <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'CASHIER']} />}>
+          <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER']} />}>
             <Route path="/customers" element={<CustomersPage />} />
             <Route path="/customers/new" element={<CustomerForm />} />
             <Route path="/customers/:id/edit" element={<CustomerForm />} />

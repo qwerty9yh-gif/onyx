@@ -1,4 +1,4 @@
-export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER' | 'INVENTORY_STAFF';
+export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER' | 'WORKER' | 'WAITER' | 'INVENTORY_STAFF';
 export type UserStatus = 'ACTIVE' | 'DISABLED' | 'INVITED';
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'DISCONTINUED' | 'OUT_OF_STOCK';
 export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'VOIDED' | 'REFUNDED';
@@ -14,6 +14,7 @@ export interface User {
   lastName: string;
   role: UserRole;
   status: UserStatus;
+  mustChangePassword?: boolean;
   phone?: string;
   avatar?: string;
   lastLogin?: string;

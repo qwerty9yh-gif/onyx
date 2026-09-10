@@ -33,7 +33,7 @@ router.post('/daily-reset', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/sales - Create a new sale
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { customerId, paymentMethod, amountReceived, notes, markPaid = true, waiterId, customerPhone } = req.body;
     const items = (req.body.items || []) as SaleItemInput[];
     if (!items.length) throw new AppError('Items required', 400);
@@ -120,7 +120,7 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/sales/:id/mark-paid - Convert an unpaid invoice into a paid sale
 router.post('/:id/mark-paid', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { paymentMethod, amountReceived } = req.body;
     const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true, customer: true } });
     if (!s) throw new AppError('Not found', 404);
@@ -211,7 +211,7 @@ router.get('/stats', async (req: AuthenticatedRequest, res, next) => {
 router.get('/waiters', async (req: AuthenticatedRequest, res, next) => {
   try {
     const waiters = await prisma.user.findMany({
-      where: { status: 'ACTIVE', role: 'CASHIER' },
+      where: { status: 'ACTIVE', role: { in: ['CASHIER', 'WAITER'] } },
       select: { id: true, firstName: true, lastName: true, role: true },
       orderBy: { firstName: 'asc' },
     });
@@ -242,7 +242,7 @@ router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/sales/:id/void - Void a sale
 router.post('/:id/void', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
     if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot void', 400);
     if (!['ADMIN', 'MANAGER'].includes(req.user!.role) && s.cashierId !== req.user!.id) throw new AppError('Forbidden', 403);
@@ -261,7 +261,7 @@ router.post('/:id/void', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/sales/:id/refund - Refund a sale
 router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { reason, amountRefunded, paymentMethod } = req.body;
     if (!reason) throw new AppError('Reason required', 400);
     const s = await prisma.sale.findUnique({ where: { id: req.params.id }, include: { items: true } });
@@ -296,7 +296,7 @@ router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/sales/:id/sms-invoice - Send SMS invoice to customer
 router.post('/:id/sms-invoice', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { phone } = req.body;
     const { sendInvoiceSms } = await import('../services/sms.js');
     const result = await sendInvoiceSms(req.params.id, phone || undefined);
