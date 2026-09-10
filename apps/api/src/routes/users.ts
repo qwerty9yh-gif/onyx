@@ -123,4 +123,60 @@ router.delete('/:id', async (req: AuthenticatedRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+// PATCH /api/users/:id/enable — Re-enable a disabled or invited user
+router.patch('/:id/enable', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (req.params.id === req.user!.id) throw new AppError('Cannot enable yourself', 400);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw new AppError('User not found', 404);
+    if (user.status === 'ACTIVE') throw new AppError('User is already active', 400);
+    const updated = await prisma.user.update({
+      where: { id: req.params.id },
+      data: { status: 'ACTIVE', deletedAt: null },
+    });
+    await prisma.auditLog.create({
+      data: {
+        userId: req.user!.id,
+        action: 'ENABLE_USER',
+        entity: 'user',
+        entityId: req.params.id,
+        details: { email: user.email, previousStatus: user.status },
+      },
+    });
+    res.json({ success: true, data: { id: updated.id, status: updated.status }, message: 'User enabled' });
+  } catch (err) { next(err); }
+});
+
+// POST /api/users/:id/change-password — Admin sets a new password for any user
+const changePasswordSchema = z.object({
+  newPassword: z.string().min(8, 'Password must be at least 8 characters').max(128),
+});
+
+router.post('/:id/change-password', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (req.user!.role !== 'ADMIN') throw new AppError('Admin only', 403);
+    const { newPassword } = changePasswordSchema.parse(req.body);
+    const user = await prisma.user.findUnique({ where: { id: req.params.id } });
+    if (!user) throw new AppError('User not found', 404);
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.user.update({
+        where: { id: req.params.id },
+        data: { passwordHash: await hashPassword(newPassword), mustChangePassword: false },
+      });
+      await tx.auditLog.create({
+        data: {
+          userId: req.user!.id,
+          action: 'ADMIN_CHANGE_PASSWORD',
+          entity: 'user',
+          entityId: req.params.id,
+          details: { email: user.email, username: user.username },
+        },
+      });
+      return u;
+    });
+    res.json({ success: true, data: { id: updated.id }, message: 'Password changed successfully' });
+  } catch (err) { next(err); }
+});
+
 export { router as userRouter };

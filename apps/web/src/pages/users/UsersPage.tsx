@@ -31,6 +31,16 @@ export const UsersPage: React.FC = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [form, setForm] = useState<NewUserForm>(EMPTY_FORM);
   const [notice, setNotice] = useState('');
+  const [usernameEditId, setUsernameEditId] = useState<string | null>(null);
+  const [usernameEditValue, setUsernameEditValue] = useState('');
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedUserLabel, setSelectedUserLabel] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [workerUsernameEditId, setWorkerUsernameEditId] = useState<string | null>(null);
+  const [workerUsernameEditValue, setWorkerUsernameEditValue] = useState('');
   const queryClient = useQueryClient();
 
   const { data } = useQuery({
@@ -53,8 +63,70 @@ export const UsersPage: React.FC = () => {
 
   const disableMutation = useMutation({
     mutationFn: (id: string) => api.delete(`/users/${id}`),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['users'] }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-workers'] });
+    },
   });
+
+  const enableMutation = useMutation({
+    mutationFn: (id: string) => api.patch(`/users/${id}/enable`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-workers'] });
+      setNotice('Account enabled successfully.');
+    },
+  });
+
+  const editUsernameMutation = useMutation({
+    mutationFn: ({ id, username }: { id: string; username: string }) => api.put(`/users/${id}`, { username }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+      queryClient.invalidateQueries({ queryKey: ['admin-workers'] });
+      setUsernameEditId(null);
+      setWorkerUsernameEditId(null);
+    },
+  });
+
+  const changePasswordMutation = useMutation({
+    mutationFn: ({ id, password }: { id: string; password: string }) => api.post(`/users/${id}/change-password`, { newPassword: password }),
+    onSuccess: () => {
+      setPasswordModalOpen(false);
+      setNotice('Password changed successfully.');
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    },
+  });
+
+  const openPasswordModal = (user: User) => {
+    setSelectedUserId(user.id);
+    setSelectedUserLabel(`${user.firstName} ${user.lastName}`);
+    setNewPassword('');
+    setConfirmPassword('');
+    setPasswordError('');
+    setPasswordModalOpen(true);
+  };
+
+  const handlePasswordSubmit = () => {
+    if (newPassword.length < 8) {
+      setPasswordError('Password must be at least 8 characters.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('Passwords do not match.');
+      return;
+    }
+    if (!selectedUserId) return;
+    setPasswordError('');
+    changePasswordMutation.mutate({ id: selectedUserId, password: newPassword });
+  };
+
+  const handleWorkerUsernameSave = (worker: User) => {
+    if (workerUsernameEditValue.trim() && workerUsernameEditValue.trim() !== worker.username) {
+      editUsernameMutation.mutate({ id: worker.id, username: workerUsernameEditValue.trim() });
+    } else {
+      setWorkerUsernameEditId(null);
+    }
+  };
 
   const resetPasswordMutation = useMutation({
     mutationFn: ({ id, payload }: { id: string; payload: { restoreDefault?: boolean; temporaryPassword?: string } }) => api.post(`/admin/workers/${id}/reset-password`, payload),
@@ -91,20 +163,74 @@ export const UsersPage: React.FC = () => {
     { key: 'status', header: 'Status', render: (row: User) => <Badge variant={row.status === 'ACTIVE' ? 'success' : 'danger'}>{row.status}</Badge> },
     {
       key: 'lastLogin', header: 'Last Login',
-      render: (row: User) => (row.lastLogin ? new Date(row.lastLogin).toLocaleDateString() : 'Never'),
+            render: (row: User) => (row.lastLogin ? new Date(row.lastLogin).toLocaleDateString() : 'Never'),
     },
     {
       key: 'actions', header: 'Actions', className: 'text-right',
       render: (row: User) => (
-        <div className="flex justify-end gap-2">
-          {row.status === 'ACTIVE' && (
+        <div className="flex flex-wrap justify-end gap-1">
+          {row.status === 'ACTIVE' ? (
             <button
               onClick={() => disableMutation.mutate(row.id)}
-              className="text-sm text-red-600 hover:text-red-800"
+              className="text-xs text-red-600 hover:text-red-800"
             >
               Disable
             </button>
+          ) : (
+            <button
+              onClick={() => enableMutation.mutate(row.id)}
+              className="text-xs text-emerald-600 hover:text-emerald-800"
+            >
+              Enable
+            </button>
           )}
+
+          {usernameEditId === row.id ? (
+            <>
+              <input
+                type="text"
+                value={usernameEditValue}
+                onChange={(e) => setUsernameEditValue(e.target.value)}
+                className="w-28 text-xs rounded border border-gray-300 px-1 py-0.5"
+                placeholder="username"
+              />
+              <button
+                onClick={() => {
+                  if (usernameEditValue.trim() && usernameEditValue.trim() !== row.username) {
+                    editUsernameMutation.mutate({ id: row.id, username: usernameEditValue.trim() });
+                  } else {
+                    setUsernameEditId(null);
+                  }
+                }}
+                className="text-xs text-emerald-600 hover:text-emerald-800"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => setUsernameEditId(null)}
+                className="text-xs text-gray-500 hover:text-gray-700"
+              >
+                ×
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => {
+                setUsernameEditId(row.id);
+                setUsernameEditValue(row.username);
+              }}
+              className="text-xs text-blue-600 hover:text-blue-800"
+            >
+              Edit Username
+            </button>
+          )}
+
+          <button
+            onClick={() => openPasswordModal(row)}
+            className="text-xs text-indigo-600 hover:text-indigo-800"
+          >
+            Change Password
+          </button>
         </div>
       ),
     },
@@ -120,7 +246,7 @@ export const UsersPage: React.FC = () => {
         <Button onClick={() => setModalOpen(true)} variant="primary">Add User</Button>
       </div>
 
-      <section className="rounded-3xl border border-red-100 bg-white/90 p-5 shadow-lg shadow-red-950/10">
+            <section className="rounded-3xl border border-red-100 bg-white/90 p-5 shadow-lg shadow-red-950/10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <h2 className="text-xl font-bold text-slate-900">Worker Management</h2>
@@ -135,9 +261,71 @@ export const UsersPage: React.FC = () => {
                 <p className="font-semibold text-slate-900">{worker.firstName} {worker.lastName} <span className="font-normal text-slate-500">@{worker.username}</span></p>
                 <p className="text-sm text-slate-500">{worker.email}</p>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center justify-end gap-2">
                 <Badge variant={worker.status === 'ACTIVE' ? 'success' : 'danger'}>{worker.status}</Badge>
-                <Button variant="outline" onClick={() => resetWorkerPassword(worker)} loading={resetPasswordMutation.isPending}>Reset Password</Button>
+
+                {worker.status === 'ACTIVE' ? (
+                  <button
+                    onClick={() => disableMutation.mutate(worker.id)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                    title="Disable worker"
+                  >
+                    Disable
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => enableMutation.mutate(worker.id)}
+                    className="text-xs text-emerald-600 hover:text-emerald-800"
+                    title="Enable worker"
+                  >
+                    Enable
+                  </button>
+                )}
+
+                {workerUsernameEditId === worker.id ? (
+                  <>
+                    <input
+                      type="text"
+                      value={workerUsernameEditValue}
+                      onChange={(e) => setWorkerUsernameEditValue(e.target.value)}
+                      className="w-28 text-xs rounded border border-gray-300 px-1 py-0.5"
+                      placeholder="username"
+                    />
+                    <button
+                      onClick={() => handleWorkerUsernameSave(worker)}
+                      className="text-xs text-emerald-600 hover:text-emerald-800"
+                    >
+                      Save
+                    </button>
+                    <button
+                      onClick={() => setWorkerUsernameEditId(null)}
+                      className="text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      ×
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setWorkerUsernameEditId(worker.id);
+                      setWorkerUsernameEditValue(worker.username);
+                    }}
+                    className="text-xs text-blue-600 hover:text-blue-800"
+                    title="Edit username"
+                  >
+                    Edit Username
+                  </button>
+                )}
+
+                <button
+                  onClick={() => openPasswordModal(worker)}
+                  className="text-xs text-indigo-600 hover:text-indigo-800"
+                  title="Change password"
+                >
+                  Change Password
+                </button>
+
+                <Button variant="outline" size="sm" onClick={() => resetWorkerPassword(worker)} loading={resetPasswordMutation.isPending}>Reset Password</Button>
               </div>
             </div>
           ))}
@@ -179,6 +367,41 @@ export const UsersPage: React.FC = () => {
         <div className="flex gap-2 mt-4">
           <Button onClick={() => createMutation.mutate(form)} loading={createMutation.isPending}>Create User</Button>
           <Button variant="outline" onClick={() => setModalOpen(false)}>Cancel</Button>
+        </div>
+            </Modal>
+
+      {/* Change Password Modal */}
+      <Modal
+        open={passwordModalOpen}
+        onClose={() => setPasswordModalOpen(false)}
+        title={`Change Password: ${selectedUserLabel}`}
+        size="md"
+      >
+        <div className="space-y-4">
+          <Input
+            label="New Password"
+            type="password"
+            value={newPassword}
+            onChange={(e) => setNewPassword(e.target.value)}
+            placeholder="Enter new password (min 8 characters)"
+          />
+          <Input
+            label="Confirm Password"
+            type="password"
+            value={confirmPassword}
+            onChange={(e) => setConfirmPassword(e.target.value)}
+            placeholder="Confirm new password"
+          />
+          {passwordError && (
+            <p className="text-sm text-red-600">{passwordError}</p>
+          )}
+          {changePasswordMutation.isError && (
+            <p className="text-sm text-red-600">{handleApiError(changePasswordMutation.error)}</p>
+          )}
+        </div>
+        <div className="flex gap-2 mt-4">
+          <Button onClick={handlePasswordSubmit} loading={changePasswordMutation.isPending}>Save Password</Button>
+          <Button variant="outline" onClick={() => setPasswordModalOpen(false)}>Cancel</Button>
         </div>
       </Modal>
     </div>
