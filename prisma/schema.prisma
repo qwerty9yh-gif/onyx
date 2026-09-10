@@ -98,7 +98,7 @@ model User {
   lastName      String
   role          Role     @default(CASHIER)
   status        UserStatus @default(INVITED)
-  phone         String?
+  phone         String?           @unique
   avatar        String?
   lastLogin     DateTime?
   createdAt     DateTime @default(now())
@@ -270,6 +270,9 @@ model Sale {
   cashier        User?             @relation("CashierSales", fields: [cashierId], references: [id])
   customerId     String?
   customer       Customer?         @relation(fields: [customerId], references: [id])
+  waiterId       String?
+  waiter         User?             @relation(fields: [waiterId], references: [id])
+  customerPhone  String?
   status         TransactionStatus @default(PENDING)
   syncStatus     SyncStatus        @default(PENDING)
   subtotal       Float             @default(0)

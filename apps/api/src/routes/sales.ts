@@ -34,7 +34,7 @@ router.post('/daily-reset', async (req: AuthenticatedRequest, res, next) => {
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     if (!['ADMIN', 'MANAGER', 'CASHIER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
-    const { customerId, paymentMethod, amountReceived, notes, markPaid = true } = req.body;
+    const { customerId, paymentMethod, amountReceived, notes, markPaid = true, waiterId, customerPhone } = req.body;
     const items = (req.body.items || []) as SaleItemInput[];
     if (!items.length) throw new AppError('Items required', 400);
     if (!paymentMethod) throw new AppError('Payment method required', 400);
@@ -50,6 +50,20 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
     }
     const business = await prisma.business.findFirst({ select: { taxRate: true } });
     const taxRate = business?.taxRate || 0;
+
+    // Resolve customer: use provided ID, or find/create by phone
+    let resolvedCustomerId = customerId;
+    if (customerPhone && !resolvedCustomerId) {
+      let c = await prisma.customer.findFirst({ where: { phone: customerPhone } });
+      if (!c) {
+        const localId = generateLocalId();
+        const displayName = `CUST-${localId.slice(0, 8).toUpperCase()}`;
+        c = await prisma.customer.create({
+          data: { name: displayName, phone: customerPhone, localId },
+        });
+      }
+      resolvedCustomerId = c.id;
+    }
     const itemsSnap = items.map((item) => {
       const p = products.find((x) => x?.id === item.productId)!;
       const sp = item.quantity * p.sellingPrice;
@@ -69,9 +83,9 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
     const sale = await prisma.$transaction(async (tx) => {
       const createdSale = await tx.sale.create({
         data: {
-          receiptNumber, cashierId: req.user!.id, customerId, status: markPaid ? 'COMPLETED' : 'PENDING',
+          receiptNumber, cashierId: req.user!.id, customerId: resolvedCustomerId, waiterId, status: markPaid ? 'COMPLETED' : 'PENDING',
           syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',
-          tax: totalTax, total: grandTotal, paymentMethod, amountReceived: received, change, notes,
+          tax: totalTax, total: grandTotal, paymentMethod, amountReceived: received, change, notes, customerPhone,
           deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: markPaid ? now : null, createdAt: now
         }
       });

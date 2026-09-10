@@ -57,14 +57,16 @@ router.get('/:id', async (req: AuthenticatedRequest, res, next) => {
 router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     const { name, email, phone, address, notes, barcode } = req.body;
-    if (!name) throw new AppError('Name required', 400);
+    if (!phone) throw new AppError('Phone number required', 400);
     if (email && await prisma.customer.findFirst({ where: { email } })) throw new AppError('Email exists', 409);
     if (barcode && await prisma.customer.findFirst({ where: { barcode } })) throw new AppError('Barcode exists', 409);
+    if (phone && await prisma.customer.findFirst({ where: { phone } })) throw new AppError('Phone number already exists', 409);
     const localId = generateLocalId();
+    const displayName = name?.trim() || `CUST-${localId.slice(0, 8).toUpperCase()}`;
     const c = await prisma.customer.create({
-      data: { name, email, phone, address, notes, barcode, localId },
+      data: { name: displayName, email, phone, address, notes, barcode, localId },
     });
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CUSTOMER', entity: 'customer', entityId: c.id, details: { name: c.name } } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_CUSTOMER', entity: 'customer', entityId: c.id, details: { name: c.name, phone: c.phone } } });
     res.status(201).json({ success: true, data: c });
   } catch (err) { next(err); }
 });
@@ -111,6 +113,18 @@ router.get('/barcode/:barcode', async (req: AuthenticatedRequest, res, next) => 
     const c = await prisma.customer.findFirst({ where: { barcode: req.params.barcode } });
     if (!c) throw new AppError('Not found', 404);
     res.json({ success: true, data: c });
+  } catch (err) { next(err); }
+});
+
+// POST /api/customers/broadcast - Send notification to all customers (future Hubtel SMS integration)
+router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { title, message } = req.body;
+    if (!message) throw new AppError('Message required', 400);
+    const customers = await prisma.customer.findMany({ where: { phone: { not: null } }, select: { id: true, name: true, phone: true } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'BROADCAST_NOTIFICATION', entity: 'customer', entityId: null, details: { title: title || 'Announcement', message, recipientCount: customers.length } } });
+    res.json({ success: true, data: { sent: customers.length, customers: customers.map((c) => ({ id: c.id, name: c.name, phone: c.phone })) }, message: `Notification queued for ${customers.length} customers (Hubtel SMS integration pending)` });
   } catch (err) { next(err); }
 });
 
