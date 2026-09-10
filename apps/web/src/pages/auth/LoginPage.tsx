@@ -86,6 +86,7 @@ export const LoginPage: React.FC = () => {
       const dest = from || homeFor(selected.role);
       console.log('[ONYX LOGIN] Redirecting to:', dest);
       queryClient.setQueryData(['me'], user);
+      setBusy(false);
       setSelected(null);
       setPassword('');
       setError('');

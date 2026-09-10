@@ -61,12 +61,36 @@ const RequireAuth = () => {
 };
 
 const RequireRole: React.FC<{ roles: UserRole[] }> = ({ roles }) => {
-  const { data: user } = useQuery({
+  const location = useLocation();
+  const hasToken = !!getToken();
+
+  const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
     queryFn: () => api.get('/auth/me').then((res) => res.data.data),
     retry: false,
+    enabled: hasToken,
   });
-  if (!user || !roles.includes(user.role)) return <Navigate to="/sales" replace />;
+
+  if (!hasToken) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-red-600"></div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return <Navigate to="/login" state={{ from: location }} replace />;
+  }
+
+  if (!roles.includes(user.role)) {
+    return <Navigate to={user.role === 'CASHIER' ? '/sales' : '/dashboard'} replace />;
+  }
+
   return <Outlet />;
 };
 
