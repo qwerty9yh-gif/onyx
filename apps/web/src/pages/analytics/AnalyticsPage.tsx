@@ -92,7 +92,7 @@ export const AnalyticsPage: React.FC = () => {
         </section>
       </div>
 
-      <section className="rounded-lg bg-white p-6 shadow"><h2 className="mb-4 text-lg font-semibold">Daily sales volume</h2><div className="flex h-44 items-end gap-3">{trend.map((point) => <div key={point.date} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t bg-sky-600" style={{ height: `${Math.max((point.sales / Math.max(...trend.map((entry) => entry.sales), 1)) * 140, point.sales ? 8 : 2)}px` }} title={`${point.sales} sales`} /><span className="text-[10px] text-gray-500">{point.date.slice(5)}</span></div>)}</div></section>
+      <section className="rounded-3xl border border-red-100 bg-white p-6 shadow-lg shadow-red-950/10"><h2 className="mb-4 text-lg font-semibold">Daily sales volume</h2><div className="flex h-44 items-end gap-3">{trend.map((point) => <div key={point.date} className="flex flex-1 flex-col items-center gap-2"><div className="w-full rounded-t bg-brand-600" style={{ height: `${Math.max((point.sales / Math.max(...trend.map((entry) => entry.sales), 1)) * 140, point.sales ? 8 : 2)}px` }} title={`${point.sales} sales`} /><span className="text-[10px] text-gray-500">{point.date.slice(5)}</span></div>)}</div></section>
 
       <div className="bg-white rounded-lg shadow p-6">
         <h2 className="text-lg font-semibold mb-4">Top Products (All Time)</h2>

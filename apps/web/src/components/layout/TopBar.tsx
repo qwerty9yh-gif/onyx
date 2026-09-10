@@ -31,12 +31,12 @@ export const TopBar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
   };
 
   return (
-    <header className="flex items-center justify-between h-14 px-4 bg-white border-b border-gray-200">
-      <button onClick={onMenuClick} className="p-2 rounded-md md:hidden hover:bg-gray-100" aria-label="Open navigation">
+    <header className="flex h-14 items-center justify-between border-b border-red-100 bg-white px-4">
+      <button onClick={onMenuClick} className="rounded-md p-2 text-brand-700 hover:bg-red-50 md:hidden" aria-label="Open navigation">
         <Menu size={20} />
       </button>
       <div className="flex-1 px-4">
-        <h1 className="text-lg font-semibold text-gray-800">ONYX POS</h1>
+        <h1 className="text-lg font-extrabold tracking-wide text-brand-700">ONYX POS</h1>
       </div>
       <div className="flex items-center gap-4">
         {me && (
@@ -46,12 +46,12 @@ export const TopBar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
               {lowStock.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{lowStock.length}</span>}
             </button>
             <div className="hidden sm:flex sm:items-center sm:gap-2">
-              <span className="text-sm text-gray-600">{me.firstName} {me.lastName}</span>
+              <span className="text-sm text-slate-700">{me.firstName} {me.lastName}</span>
               <Badge variant={roleVariant(me.role)} size="sm">{me.role}</Badge>
             </div>
             <button
               onClick={handleLogout}
-              className="p-2 text-gray-600 rounded-md hover:bg-gray-100 hover:text-gray-900"
+              className="rounded-md p-2 text-slate-600 hover:bg-red-50 hover:text-brand-700"
               title="Logout"
             >
               <LogOut size={18} />

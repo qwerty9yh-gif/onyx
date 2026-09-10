@@ -25,25 +25,11 @@ const ROLE_LABEL: Record<string, string> = {
 };
 
 const ROLE_TONE: Record<string, string> = {
-  ADMIN: 'bg-brand-900 text-white shadow-glow-red',
-  MANAGER: 'bg-brand-600 text-white shadow-glow-red',
-  CASHIER: 'bg-white border border-slate-200 text-slate-700',
-  INVENTORY_STAFF: 'bg-slate-100 text-slate-700',
+  ADMIN: 'bg-brand-700 text-white shadow-glow-red',
+  MANAGER: 'bg-red-100 text-brand-700',
+  CASHIER: 'bg-white border border-red-200 text-brand-700',
+  INVENTORY_STAFF: 'bg-red-50 text-brand-700',
 };
-
-const AVATAR_CLASSES = [
-  'from-brand-600 to-brand-900',
-  'from-rose-500 to-red-800',
-  'from-red-500 to-brand-900',
-  'from-amber-500 to-red-700',
-  'from-red-700 to-black',
-];
-
-function initialColor(seed: string): string {
-  let hash = 0;
-  for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) % 997;
-  return AVATAR_CLASSES[hash % AVATAR_CLASSES.length];
-}
 
 function homeFor(role: string): string {
   switch (role) {
@@ -128,7 +114,7 @@ export const LoginPage: React.FC = () => {
       onClick={() => openUser(user)}
       className="group flex min-h-48 flex-col items-center rounded-3xl border border-red-100 bg-white/90 p-3 text-center shadow-lg shadow-red-950/10 backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 sm:p-5 animate-fade-in"
     >
-      <div className={`bg-gradient-to-br ${initialColor(user.email || user.id)} flex h-14 w-14 items-center justify-center rounded-2xl text-lg font-extrabold text-white shadow-md sm:h-16 sm:w-16 sm:text-xl`}>
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-lg font-extrabold text-white shadow-glow-red sm:h-16 sm:w-16 sm:text-xl">
         {(user.firstName?.[0] || '?') + (user.lastName?.[0] || '')}
       </div>
       <div className="mt-3 min-w-0">
@@ -205,7 +191,7 @@ return (
             </div>
 
             <div className="mt-7 flex flex-col items-center">
-              <div className={`bg-gradient-to-br ${initialColor(selected.email || selected.id)} h-24 w-24 rounded-3xl flex items-center justify-center text-white font-extrabold text-3xl shadow-glow-red`}>
+              <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-brand-700 text-3xl font-extrabold text-white shadow-glow-red">
                 {(selected.firstName?.[0] || '?') + (selected.lastName?.[0] || '')}
               </div>
               <p className="mt-3 text-xl font-bold text-slate-900">{selected.firstName} {selected.lastName}</p>
@@ -221,13 +207,13 @@ return (
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleSubmit(); }}
                 placeholder="Password"
                 aria-label="Password"
-                className="onyx-focus-ring h-14 w-full rounded-2xl border border-slate-200 bg-white px-4 text-lg shadow-inner outline-none"
+                className="onyx-focus-ring h-14 w-full rounded-2xl border border-red-200 bg-red-50 px-4 text-lg shadow-inner outline-none placeholder:text-red-300"
               />
               {error && <p className="mt-3 text-sm font-semibold text-red-600">{error}</p>}
               <button
                 onClick={() => void handleSubmit()}
                 disabled={busy || !password}
-                className="mt-5 h-14 w-full rounded-2xl bg-gradient-to-r from-brand-700 to-brand-500 text-white text-lg font-bold shadow-glow-red transition hover:brightness-110 disabled:opacity-50"
+                className="mt-5 h-14 w-full rounded-2xl bg-brand-700 text-lg font-bold text-white shadow-glow-red transition hover:bg-brand-800 disabled:opacity-50"
               >
                 {busy ? <span className="animate-spin inline-block h-5 w-5 rounded-full border-2 border-white border-t-transparent" /> : 'Sign in →'}
               </button>

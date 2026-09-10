@@ -18,10 +18,10 @@ const NavItem: React.FC<NavItemProps> = ({ to, icon, label }) => {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-3 px-4 py-2.5 rounded-md mx-2 my-1 text-sm font-medium transition-colors ${
+        `mx-2 my-1 flex items-center gap-3 rounded-xl border border-transparent px-4 py-2.5 text-sm font-medium transition-colors ${
           isActive
-            ? 'bg-brand-600 text-white shadow-glow-red'
-            : 'text-gray-300 hover:bg-gray-800 hover:text-white'
+            ? 'border-red-200 bg-red-600 text-white shadow-glow-red'
+            : 'text-slate-600 hover:border-red-100 hover:bg-red-50 hover:text-red-700'
         }`
       }
     >
@@ -37,7 +37,6 @@ export const Navigation: React.FC = () => {
     queryFn: () => api.get('/auth/me').then((res) => res.data.data),
     retry: false,
   });
-  const isCashier = me?.role === 'CASHIER';
   const canManageInventory = ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(me?.role || '');
   const canManageCustomers = ['ADMIN', 'MANAGER'].includes(me?.role || '');
 

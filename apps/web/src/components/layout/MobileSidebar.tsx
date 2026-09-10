@@ -15,10 +15,10 @@ export const MobileSidebar: React.FC<MobileSidebarProps> = ({ open, onClose }) =
       }`}
     >
       <div className="absolute inset-0 bg-black bg-opacity-50" onClick={onClose} />
-      <div className="absolute top-0 left-0 h-full w-64 bg-gray-900 text-white">
-        <div className="flex items-center justify-between h-14 border-b border-white/10 px-4 bg-brand-700">
+      <div className="absolute left-0 top-0 h-full w-64 border-r border-red-100 bg-white text-slate-900 shadow-2xl">
+        <div className="flex h-14 items-center justify-between border-b border-red-100 bg-brand-700 px-4">
           <h1 className="text-lg font-extrabold tracking-wider text-white">ONYX POS</h1>
-          <button onClick={onClose} className="p-1 rounded hover:bg-gray-800">
+          <button onClick={onClose} className="rounded p-1 text-white hover:bg-brand-800">
             <X size={20} />
           </button>
         </div>

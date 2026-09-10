@@ -204,29 +204,29 @@ export const SalesPage: React.FC = () => {
     <div className="mx-auto max-w-7xl space-y-5">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold uppercase tracking-widest text-sky-700">Point of sale</p>
+          <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Point of sale</p>
           <h1 className="text-3xl font-bold text-slate-900">Make a sale</h1>
         </div>
-        <div className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${online ? 'bg-emerald-100 text-emerald-700' : 'bg-amber-100 text-amber-800'}`}>
+        <div className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${online ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-800'}`}>
           {online ? <Wifi size={16} /> : <WifiOff size={16} />}
           {online ? 'Online' : 'Offline mode'}
         </div>
       </header>
 
-      {toast && <div className="fixed right-4 top-20 z-40 rounded-2xl bg-slate-900 px-4 py-3 text-sm font-semibold text-white shadow-xl" role="status">{toast}</div>}
-      {queuedCount > 0 && <div className="rounded-2xl bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" role="status">{queuedCount} offline sale{queuedCount === 1 ? '' : 's'} waiting to sync{syncError ? `: ${syncError}` : '.'}</div>}
+      {toast && <div className="fixed right-4 top-20 z-40 rounded-2xl bg-brand-700 px-4 py-3 text-sm font-semibold text-white shadow-glow-red" role="status">{toast}</div>}
+      {queuedCount > 0 && <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-800" role="status">{queuedCount} offline sale{queuedCount === 1 ? '' : 's'} waiting to sync{syncError ? `: ${syncError}` : '.'}</div>}
 
       <div className="grid gap-5 xl:grid-cols-[1fr_390px]">
         <section className="space-y-4">
-          <div className="relative rounded-3xl border border-white/80 bg-white/75 p-4 shadow-xl shadow-slate-200/60 backdrop-blur-xl">
-            <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-sky-600" size={21} />
-            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product or scan barcode" autoFocus className="h-14 w-full rounded-2xl border-0 bg-sky-50/80 pl-12 pr-4 text-lg outline-none ring-2 ring-transparent transition focus:ring-sky-300" />
+          <div className="relative rounded-3xl border border-red-200 bg-white/90 p-4 shadow-xl shadow-red-950/10 backdrop-blur-xl">
+            <Search className="absolute left-7 top-1/2 -translate-y-1/2 text-brand-700" size={21} />
+            <input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search product or scan barcode" autoFocus className="h-14 w-full rounded-2xl border-0 bg-red-50 pl-12 pr-4 text-lg outline-none ring-2 ring-transparent transition focus:ring-red-300" />
           </div>
-          <div className="grid max-h-[32rem] grid-cols-2 gap-3 overflow-y-auto pr-1 sm:grid-cols-3 xl:grid-cols-4">
+          <div className="grid max-h-[38rem] grid-cols-2 auto-rows-[8.5rem] gap-3 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-red-50/50 p-3 pr-2 shadow-xl shadow-red-950/10">
             {productsLoading && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Loading products...</div>}
             {!productsLoading && products.map((product) => (
-              <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group min-h-36 rounded-3xl border border-white/80 bg-white/80 p-4 text-left shadow-lg shadow-slate-200/50 transition hover:-translate-y-1 hover:shadow-xl disabled:cursor-not-allowed disabled:opacity-50">
-                <span className="mb-3 flex h-11 w-11 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><ShoppingCart size={20} /></span>
+              <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group rounded-2xl border border-red-100 bg-white p-3 text-left shadow-lg shadow-red-950/10 transition hover:-translate-y-1 hover:border-brand-500 hover:shadow-glow-red disabled:cursor-not-allowed disabled:opacity-50">
+                <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-red-100 text-brand-700"><ShoppingCart size={20} /></span>
                 <span className="block truncate font-bold text-slate-800">{product.name}</span>
                 <span className="mt-1 block text-sm text-slate-500">{money(product.sellingPrice)} · {product.stockQuantity} in stock</span>
               </button>
@@ -236,7 +236,7 @@ export const SalesPage: React.FC = () => {
         </section>
 
         <aside ref={cartRef} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-2xl shadow-slate-300/40 backdrop-blur-xl">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-semibold text-sky-700">Current order</p><h2 className="text-2xl font-bold">Cart <span className="text-slate-400">({cart.length})</span></h2></div><button type="button" onClick={() => { clearCart(); setCart([]); }} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button></div>
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-semibold text-brand-700">Current order</p><h2 className="text-2xl font-bold">Cart <span className="text-slate-400">({cart.length})</span></h2></div><button type="button" onClick={() => { clearCart(); setCart([]); }} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button></div>
           <div className="mb-5 max-h-[38vh] space-y-3 overflow-y-auto pr-1">
             {cart.map((item) => <div key={item.productId} className="rounded-2xl bg-sky-50/80 p-3"><div className="flex justify-between gap-3"><div><p className="font-semibold text-slate-800">{item.name}</p><p className="text-xs text-slate-500">{money(item.unitPrice)} each</p></div><strong>{money(item.unitPrice * item.quantity)}</strong></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={() => updateQuantity(item.productId, -1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Minus size={16} /></button><span className="min-w-8 text-center font-bold">{item.quantity}</span><button type="button" onClick={() => updateQuantity(item.productId, 1)} className="rounded-xl bg-white p-2 text-sky-700 shadow-sm"><Plus size={16} /></button></div></div>)}
             {!cart.length && <div className="rounded-2xl border border-dashed border-sky-200 p-8 text-center text-slate-500">Your cart is ready.</div>}

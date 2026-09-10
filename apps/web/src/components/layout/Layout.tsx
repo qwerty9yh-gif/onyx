@@ -19,8 +19,8 @@ export const Layout: React.FC = () => {
   return (
     <div className="flex h-screen overflow-hidden bg-slate-100 text-slate-900">
       <MobileSidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
-      <div className="hidden md:flex md:flex-col md:w-64 md:bg-gradient-to-b md:from-slate-900 md:to-slate-800 md:text-white md:shadow-xl">
-        <div className="flex items-center justify-center h-16 border-b border-white/10 bg-brand-700">
+      <div className="hidden md:flex md:w-64 md:flex-col md:border-r md:border-red-100 md:bg-white md:shadow-xl">
+        <div className="flex h-16 items-center justify-center border-b border-red-100 bg-brand-700">
           <h1 className="text-lg font-extrabold tracking-wider text-white">ONYX POS</h1>
         </div>
         <Navigation />

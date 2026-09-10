@@ -90,7 +90,7 @@ export const ProductForm: React.FC = () => {
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <div>
-        <p className="text-sm font-semibold uppercase tracking-widest text-sky-700">Product management</p>
+        <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Product management</p>
         <h1 className="text-3xl font-bold text-slate-900">{isEdit ? 'Edit product' : 'Add product'}</h1>
         <p className="mt-1 text-sm text-slate-500">Changes are saved to the local inventory immediately.</p>
       </div>

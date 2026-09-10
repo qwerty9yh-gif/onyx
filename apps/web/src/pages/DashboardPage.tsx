@@ -18,7 +18,7 @@ const StatCard: React.FC<{
   const tones = {
     red: 'bg-gradient-to-br from-brand-600 to-brand-800 text-white shadow-glow-red',
     white: 'bg-white border border-slate-200 text-slate-900 shadow-glass-sm',
-    dark: 'bg-gradient-to-br from-slate-800 to-slate-900 text-white shadow-glass',
+    dark: 'bg-gradient-to-br from-brand-700 to-brand-900 text-white shadow-glow-red',
   };
   return (
     <div className={`rounded-3xl p-5 ${tones[tone]} transition hover:-translate-y-0.5 hover:shadow-glass animate-fade-in`}>
