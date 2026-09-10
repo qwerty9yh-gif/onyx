@@ -8,10 +8,7 @@ import { AuthenticatedRequest } from '../types/index.js';
 
 const router = Router();
 
-const loginSchema = z.object({ email: z.string().email('Invalid email'), password: z.string().min(1, 'Password required') });
 const cardLoginSchema = z.object({ userId: z.string().min(1, 'User required'), password: z.string().min(1, 'Password required') });
-const registerSchema = z.object({ email: z.string().email('Invalid email'), username: z.string().min(3), password: z.string().min(8), firstName: z.string().min(1), lastName: z.string().min(1), role: z.enum(['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF']).default('CASHIER'), phone: z.string().optional() });
-
 // GET /api/auth/users - Public list of active users for the card login screen
 router.get('/users', async (_req, res, next) => {
   try {
@@ -37,26 +34,6 @@ router.post('/card-login', async (req, res, next) => {
     const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
     await prisma.session.create({ data: { userId: user.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
     const deviceId = req.headers['x-device-id'] as string || generateDeviceId();
-    const device = await prisma.device.upsert({ where: { deviceId }, update: { name: req.headers['x-device-name'] as string || 'ONYX POS', lastSeen: new Date(), onlineStatus: true }, create: { deviceId, name: req.headers['x-device-name'] as string || 'ONYX POS', userId: user.id, onlineStatus: true } });
-    const deviceToken = signToken({ deviceId, type: 'device' }, '30d');
-    await prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });
-    await prisma.auditLog.create({ data: { userId: user.id, action: 'LOGIN', entity: 'user', entityId: user.id, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
-    res.json({ success: true, data: { user: { id: user.id, email: user.email, username: user.username, firstName: user.firstName, lastName: user.lastName, role: user.role, status: user.status }, token, deviceToken, deviceId: device.id, expiresAt } });
-  } catch (err) { next(err); }
-});
-
-router.post('/login', async (req, res, next) => {
-  try {
-    const { email, password } = loginSchema.parse(req.body);
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || user.status !== 'ACTIVE') throw new AppError('Invalid credentials', 401);
-    const ok = await verifyPassword(password, user.passwordHash);
-    if (!ok) throw new AppError('Invalid credentials', 401);
-    await prisma.user.update({ where: { id: user.id }, data: { lastLogin: new Date() } });
-    const token = signToken({ userId: user.id, email: user.email, role: user.role }, '7d');
-    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-    const session = await prisma.session.create({ data: { userId: user.id, token, expiresAt, ipAddress: req.ip, userAgent: req.headers['user-agent'] || null } });
-    let deviceId = req.headers['x-device-id'] as string || generateDeviceId();
     const device = await prisma.device.upsert({ where: { deviceId }, update: { name: req.headers['x-device-name'] as string || 'ONYX POS', lastSeen: new Date(), onlineStatus: true }, create: { deviceId, name: req.headers['x-device-name'] as string || 'ONYX POS', userId: user.id, onlineStatus: true } });
     const deviceToken = signToken({ deviceId, type: 'device' }, '30d');
     await prisma.session.create({ data: { userId: user.id, token: deviceToken, expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), deviceId: device.id, ipAddress: req.ip, userAgent: 'Device' } });

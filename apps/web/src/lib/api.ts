@@ -6,7 +6,7 @@ export const api = axios.create({
 });
 
 // Paths that should NOT trigger automatic logout on 401
-const SKIP_LOGOUT_PATHS = ['/auth/login', '/auth/card-login', '/auth/users'];
+const SKIP_LOGOUT_PATHS = ['/auth/card-login', '/auth/users'];
 
 // Ensure Authorization header is always attached if a token exists
 api.interceptors.request.use((config) => {

@@ -28,15 +28,6 @@ export function setUser(user: User): void {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
-export async function login(email: string, password: string) {
-  const res = await api.post('/auth/login', { email, password });
-  const { token, user } = res.data.data;
-  setToken(token);
-  setUser(user);
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  return user;
-}
-
 /** ONYX card login: pick a user card, then enter only the password.
  * POST /auth/card-login returns 200 OK on success, 401 Unauthorized on wrong password.
  * This function throws a typed error so the UI can show "Wrong password." */
