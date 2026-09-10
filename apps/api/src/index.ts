@@ -21,6 +21,7 @@ import { settingsRouter } from './routes/settings.js';
 import { healthRouter } from './routes/health.js';
 import { maintenanceRouter } from './routes/maintenance.js';
 import { prisma } from './utils/prisma.js';
+import { hashPassword } from './utils/helpers.js';
 
 const app = express();
 
@@ -95,6 +96,31 @@ const startServer = async () => {
     // Test database connection
     await prisma.$queryRaw`SELECT 1`;
     console.log('✓ Database connected');
+
+    const adminPasswordHash = await hashPassword('123456789');
+    const admin = await prisma.user.upsert({
+      where: { email: 'qwerty9yh@gmail.com' },
+      update: {
+        username: 'Admin k',
+        firstName: 'ONYX',
+        lastName: 'Administrator',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        passwordHash: adminPasswordHash,
+        deletedAt: null,
+      },
+      create: {
+        email: 'qwerty9yh@gmail.com',
+        username: 'Admin k',
+        firstName: 'ONYX',
+        lastName: 'Administrator',
+        role: 'ADMIN',
+        status: 'ACTIVE',
+        passwordHash: adminPasswordHash,
+      },
+      select: { id: true, email: true, username: true, role: true, status: true },
+    });
+    console.log(`✓ Admin account ready: ${admin.email} (${admin.username}, ${admin.status})`);
 
     app.listen(config.port, '0.0.0.0', () => {
       console.log(`✓ Server running on port ${config.port}`);
