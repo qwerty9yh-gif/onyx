@@ -126,20 +126,20 @@ export const LoginPage: React.FC = () => {
     <button
       key={user.id}
       onClick={() => openUser(user)}
-      className="group text-left rounded-3xl border border-white/70 bg-white/80 shadow-lg shadow-slate-200/40 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 backdrop-blur p-5 transition duration-200 animate-fade-in"
+      className="group flex min-h-48 flex-col items-center rounded-3xl border border-red-100 bg-white/90 p-3 text-center shadow-lg shadow-red-950/10 backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 sm:p-5 animate-fade-in"
     >
-      <div className={`bg-gradient-to-br ${initialColor(user.email || user.id)} h-16 w-16 rounded-2xl flex items-center justify-center text-white font-extrabold text-xl shadow-md`}>
+      <div className={`bg-gradient-to-br ${initialColor(user.email || user.id)} flex h-14 w-14 items-center justify-center rounded-2xl text-lg font-extrabold text-white shadow-md sm:h-16 sm:w-16 sm:text-xl`}>
         {(user.firstName?.[0] || '?') + (user.lastName?.[0] || '')}
       </div>
-      <div className="mt-3">
-        <p className="font-bold text-slate-800">{user.firstName} {user.lastName}</p>
-        <p className="text-xs text-slate-500 mt-0.5">{user.email}</p>
+      <div className="mt-3 min-w-0">
+        <p className="truncate font-bold text-slate-800">{user.firstName} {user.lastName}</p>
+        <p className="mt-0.5 truncate text-[10px] text-slate-500 sm:text-xs">{user.email}</p>
       </div>
-      <div className="mt-3 flex flex-wrap items-center gap-2">
-        <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-bold ${ROLE_TONE[user.role] || 'bg-slate-100 text-slate-600'}`}>
+      <div className="mt-3 flex flex-wrap items-center justify-center gap-1.5">
+        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold sm:px-2.5 sm:text-[11px] ${ROLE_TONE[user.role] || 'bg-slate-100 text-slate-600'}`}>
           <ShieldCheck size={12} /> {ROLE_LABEL[user.role] || user.role.replace('_', ' ')}
         </span>
-        <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
+        <span className={`rounded-full px-2 py-0.5 text-[9px] font-semibold ${user.status === 'ACTIVE' ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
           {user.status === 'ACTIVE' ? 'Active' : 'Disabled'}
         </span>
       </div>
@@ -179,7 +179,7 @@ return (
         )}
 
         {!isLoading && users.length > 0 && (
-          <div className="grid gap-5 sm:grid-cols-2">
+          <div className="grid grid-cols-2 gap-3 sm:gap-5">
             {users.map(renderCard)}
           </div>
         )}
