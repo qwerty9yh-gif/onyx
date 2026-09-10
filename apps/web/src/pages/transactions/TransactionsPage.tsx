@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Phone, Printer, Receipt, Search, Send, UserRound, WalletCards, X } from 'lucide-react';
 import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
+import { triggerDashboardRefresh } from '../../lib/offline';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { printInvoice, type InvoiceData } from '../../lib/printer';
@@ -59,6 +60,8 @@ export const TransactionsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['products-search'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      triggerDashboardRefresh();
       setSelected(null);
       setError('');
     },

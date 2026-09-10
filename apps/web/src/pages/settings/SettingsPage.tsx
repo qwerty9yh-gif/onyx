@@ -8,6 +8,7 @@ import {
 } from 'lucide-react';
 import { api, handleApiError } from '../../lib/api';
 import { logout } from '../../lib/auth';
+import { triggerDashboardRefresh } from '../../lib/offline';
 import type { Business, Category, Product } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -88,7 +89,14 @@ export const SettingsPage: React.FC = () => {
   const saveSettings = useMutation({ mutationFn: () => api.put('/settings', { business: form }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings'] }) });
   const updateProduct = useMutation({ mutationFn: ({ id, data }: { id: string; data: ProductDraft }) => api.put(`/products/${id}`, data), onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['settings-products'] }); queryClient.invalidateQueries({ queryKey: ['products'] }); setEditing(null); } });
   const deleteProduct = useMutation({ mutationFn: (id: string) => api.delete(`/products/${id}`), onSuccess: () => queryClient.invalidateQueries({ queryKey: ['settings-products'] }) });
-  const dailyReset = useMutation({ mutationFn: () => api.post('/sales/daily-reset') });
+  const dailyReset = useMutation({
+    mutationFn: () => api.post('/sales/daily-reset'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      triggerDashboardRefresh();
+    },
+  });
 
   const visibleProducts = useMemo(() => products.filter((product) => (!search || `${product.name} ${product.sku}`.toLowerCase().includes(search.toLowerCase())) && (!categoryId || product.categoryId === categoryId)).sort((a, b) => sort === 'price' ? a.sellingPrice - b.sellingPrice : sort === 'category' ? (a.category?.name || '').localeCompare(b.category?.name || '') : a.name.localeCompare(b.name)), [products, search, categoryId, sort]);
   const setBusiness = (patch: Partial<BusinessForm>) => setForm((current) => ({ ...current, ...patch }));

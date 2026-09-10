@@ -1,22 +1,31 @@
 import React, { useState } from 'react';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { Home, Receipt, ShoppingCart, Truck, Settings, Users } from 'lucide-react';
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { Navigation } from './Navigation';
 import { TopBar } from './TopBar';
 import { MobileSidebar } from './MobileSidebar';
 import { getUser } from '../../lib/auth';
+import { triggerDashboardRefresh } from '../../lib/offline';
 
 export const Layout: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const location = useLocation();
+  const queryClient = useQueryClient();
   const { data: me } = useQuery({
     queryKey: ['me'],
     queryFn: () => api.get('/auth/me').then((res) => res.data.data),
     retry: false,
   });
-  const dailyReset = useMutation({ mutationFn: () => api.post('/sales/daily-reset') });
+  const dailyReset = useMutation({
+    mutationFn: () => api.post('/sales/daily-reset'),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      triggerDashboardRefresh();
+    },
+  });
   const role = me?.role || getUser()?.role;
   const isWebView1 = typeof navigator !== 'undefined' && /WebView1/i.test(navigator.userAgent);
   return (

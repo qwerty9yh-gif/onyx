@@ -8,8 +8,38 @@ import {
   DollarSign, ShoppingBag, Clock, FileText, WifiOff,
 } from 'lucide-react';
 import { money } from '../lib/helpers';
-import { loadCachedDashboardStats, cacheDashboardStats } from '../lib/offline';
+import { loadCachedDashboardStats, cacheDashboardStats, triggerDashboardRefresh } from '../lib/offline';
 import { getUser } from '../lib/auth';
+
+const emptyDashboardStats = (): DashboardStats => ({
+  today: { sales: 0, revenue: 0 },
+  week: { sales: 0, revenue: 0 },
+  month: { sales: 0, revenue: 0 },
+  totalTransactions: 0,
+  avgTransaction: 0,
+  lowStock: 0,
+  outOfStock: 0,
+  pendingInvoices: 0,
+  topProducts: [],
+  topCategories: [],
+  recentActivity: [],
+});
+
+const normalizeDashboardStats = (value?: Partial<DashboardStats> | null): DashboardStats => {
+  const base = emptyDashboardStats();
+  if (!value) return base;
+
+  return {
+    ...base,
+    ...value,
+    today: { ...base.today, ...value.today },
+    week: { ...base.week, ...value.week },
+    month: { ...base.month, ...value.month },
+    topProducts: value.topProducts ?? [],
+    topCategories: value.topCategories ?? [],
+    recentActivity: value.recentActivity ?? [],
+  };
+};
 
 const StatCard: React.FC<{
   title: string;
@@ -49,7 +79,7 @@ export const DashboardPage: React.FC = () => {
     queryKey: ['dashboard'],
     queryFn: async () => {
       const res = await api.get('/analytics/dashboard');
-      const data = res.data.data;
+      const data = normalizeDashboardStats(res.data.data);
       if (userId) cacheDashboardStats(userId, data);
       setCachedStats(null);
       setIsOfflineMode(false);
@@ -64,17 +94,24 @@ export const DashboardPage: React.FC = () => {
       setOnline(true);
       setIsOfflineMode(false);
       refetch({ cancelRefetch: false });
+      triggerDashboardRefresh();
     };
     const handleOffline = () => {
       setOnline(false);
     };
+    const handleDashboardRefresh = () => {
+      setCachedStats(null);
+      setIsOfflineMode(false);
+      refetch({ cancelRefetch: false });
+    };
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
+    window.addEventListener('dashboard:refresh', handleDashboardRefresh);
 
     if (!online && stats === undefined && userId) {
       const cached = loadCachedDashboardStats<DashboardStats>(userId);
       if (cached) {
-        setCachedStats(cached);
+        setCachedStats(normalizeDashboardStats(cached));
         setIsOfflineMode(true);
       }
     }
@@ -82,6 +119,7 @@ export const DashboardPage: React.FC = () => {
     return () => {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
+      window.removeEventListener('dashboard:refresh', handleDashboardRefresh);
     };
   }, [online, stats, userId, refetch]);
 
@@ -95,13 +133,16 @@ export const DashboardPage: React.FC = () => {
     if (isError && userId && !online) {
       const cached = loadCachedDashboardStats<DashboardStats>(userId);
       if (cached) {
-        setCachedStats(cached);
+        setCachedStats(normalizeDashboardStats(cached));
         setIsOfflineMode(true);
       }
     }
   }, [isError, userId, online]);
 
-  if (isLoading && !isOfflineMode) {
+  const displayStats = normalizeDashboardStats(stats ?? cachedStats ?? null);
+  const recentActivity = displayStats.recentActivity ?? [];
+
+  if (isLoading && !stats && !cachedStats && !isOfflineMode) {
     return (
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[...Array(8)].map((_, i) => (
@@ -110,24 +151,6 @@ export const DashboardPage: React.FC = () => {
             <div className="mt-3 h-6 bg-slate-200 rounded w-3/4"></div>
           </div>
         ))}
-      </div>
-    );
-  }
-
-  const displayStats = stats ?? cachedStats;
-
-  if (!displayStats) {
-    return (
-      <div className="onyx-layered-card rounded-3xl border border-red-100 bg-white p-8 text-center shadow-lg shadow-red-950/10">
-        <h1 className="text-2xl font-bold text-slate-900">Dashboard</h1>
-        {isOfflineMode ? (
-          <>
-            <p className="mt-2 text-sm text-slate-600">No dashboard data available offline.</p>
-            <p className="mt-1 text-xs text-slate-400">Connect to the internet to load live data.</p>
-          </>
-        ) : (
-          <p className="mt-2 text-sm text-slate-600">Dashboard data is temporarily unavailable.</p>
-        )}
       </div>
     );
   }
@@ -186,27 +209,35 @@ export const DashboardPage: React.FC = () => {
         <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Top Products</h2>
           <div className="space-y-3">
-            {displayStats.topProducts?.slice(0, 5).map((p) => (
+            {displayStats.topProducts.slice(0, 5).map((p) => (
               <div key={p.id} className="flex items-center justify-between">
                 <span className="text-sm font-medium text-slate-700">{p.name}</span>
                 <Badge variant="outline">{p.quantity} sold</Badge>
               </div>
-            )) || <p className="text-sm text-slate-500">No data</p>}
+            ))}
+            {displayStats.topProducts.length === 0 && <p className="text-sm text-slate-500">No data</p>}
           </div>
         </div>
       </div>
 
-      {displayStats.recentActivity && displayStats.recentActivity.length > 0 && (
+      {recentActivity.length > 0 && (
         <div className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
           <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Activity</h2>
           <div className="space-y-2">
-            {displayStats.recentActivity.slice(0, 5).map((log) => (
+            {recentActivity.slice(0, 5).map((log) => (
               <div key={log.id} className="flex items-center justify-between text-sm">
                 <span className="text-slate-600">{log.user?.firstName} {log.user?.lastName} — {log.action}</span>
                 <span className="text-slate-400"><Clock size={12} className="inline mr-1" />{new Date(log.createdAt).toLocaleString()}</span>
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {recentActivity.length === 0 && (
+        <div className="rounded-3xl border border-slate-200 bg-white/80 p-5 shadow-glass backdrop-blur-xl">
+          <h2 className="text-lg font-bold text-slate-900 mb-4">Recent Activity</h2>
+          <p className="text-sm text-slate-500">No recent business activity yet.</p>
         </div>
       )}
 

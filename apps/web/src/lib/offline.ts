@@ -107,3 +107,9 @@ export function loadCachedDashboardStats<T>(userId: string): T | null {
 export function clearCachedDashboardStats(): void {
   localStorage.removeItem(DASHBOARD_KEY);
 }
+
+export function triggerDashboardRefresh(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('dashboard:refresh'));
+  }
+}
