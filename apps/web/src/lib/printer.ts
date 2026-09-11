@@ -96,6 +96,48 @@ function buildQrRaster(qr: { size: number; dark: (row: number, col: number) => b
   return new Uint8Array([...header, ...raster]);
 }
 
+export interface ReceivingLine {
+  name: string;
+  quantity: number;
+}
+
+export interface ReceivingReport {
+  storeName: string;
+  batchNumber: string;
+  createdAt: string;
+  time: string;
+  cashier: string;
+  lines: ReceivingLine[];
+  totalProducts: number;
+  totalUnits: number;
+}
+
+export function buildEscPosReceivingReport(report: ReceivingReport): Uint8Array {
+  const qr = qrMatrix(`ONYX|${report.batchNumber}|${report.totalUnits}`);
+  const chunks: Uint8Array[] = [
+    text(`${ESC}@${ESC}a\x01ONYX LOUNGE / PUB\n`),
+    text(`${ESC}a\x00${VENUE_NAME}\n${VENUE_LOCATION}\n${VENUE_PHONE}\n`),
+    text(`${ESC}a\x01Inventory Receiving Report\n`),
+    text(`${ESC}a\x00Batch: ${report.batchNumber}\nDate: ${report.createdAt}\nTime: ${report.time}\nStaff: ${report.cashier}\n`),
+    text('------------------------------------------\n'),
+    text(`Product                     Qty\n`),
+  ];
+
+  for (const line of report.lines) {
+    chunks.push(text(` ${line.name.slice(0, 26)}\n  ${line.quantity}\n`));
+  }
+
+  chunks.push(text('------------------------------------------\n'));
+  chunks.push(text(`${ESC}a\x01Total Products:           ${report.totalProducts}\n`));
+  chunks.push(text(`${ESC}a\x01Total Units:              ${report.totalUnits}\n`));
+  chunks.push(text(`${ESC}a\x00\nStock updated successfully.\n\n`));
+  chunks.push(buildQrRaster(qr, 4, 2));
+  chunks.push(text(`\n${ESC}a\x01${report.storeName}\n`));
+  chunks.push(text(`${ESC}a\x00`));
+  chunks.push(text(`${GS}V\x01`));
+  return concat(chunks);
+}
+
 export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
   const qr = qrMatrix(`ONYX|${receipt.receiptNumber}|${receipt.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
@@ -219,6 +261,37 @@ function printDocument(html: string, title: string): void {
   } catch {
     win.close();
   }
+}
+
+export function printReceivingReport(report: ReceivingReport): void {
+  const qr = qrSvgDataUrl(`ONYX|${report.batchNumber}|${report.totalUnits}`, 6, 4);
+  const esc = (v: string) => v.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const html = `
+    <div class="sheet">
+      <header>
+        <h1>ONYX LOUNGE / PUB</h1>
+        <div class="meta">${VENUE_NAME}<br/>${VENUE_LOCATION}<br/>${VENUE_PHONE}</div>
+        <div class="doc">INVENTORY RECEIVING REPORT</div>
+      </header>
+      <table class="infos">
+        <tr><td>Batch</td><td><strong>Batch #${esc(report.batchNumber)}</strong></td></tr>
+        <tr><td>Date</td><td>${esc(report.createdAt)}</td></tr>
+        <tr><td>Time</td><td>${esc(report.time)}</td></tr>
+        <tr><td>Staff</td><td>${esc(report.cashier)}</td></tr>
+      </table>
+      <table class="items">
+        <thead><tr><th>Product</th><th class="c">Qty</th></tr></thead>
+        <tbody>
+          ${report.lines.map((line) => `<tr><td>${esc(line.name)}</td><td class="c">${line.quantity}</td></tr>`).join('')}
+          <tr class="sep"><td colspan="2"></td></tr>
+          <tr><td colspan="1" class="lbl">Total Unique Products</td><td class="c">${report.totalProducts}</td></tr>
+          <tr class="grand"><td>Total Units Received</td><td class="c">${report.totalUnits}</td></tr>
+        </tbody>
+      </table>
+      <div class="qr"><img src="${qr}" alt="QR" width="120" height="120" /></div>
+      <footer>Stock updated successfully.<br/>Thank you, ONYX POS</footer>
+    </div>`;
+  printDocument(html, `Receiving ${report.batchNumber}`);
 }
 
 export function printReceipt(receipt: ReceiptData): void {

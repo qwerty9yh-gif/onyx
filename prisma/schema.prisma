@@ -114,6 +114,7 @@ model User {
   waiterSales   Sale[]              @relation("WaiterSales")
   refunds       Refund[]            @relation("RefundCashier")
   inventoryOps  InventoryMovement[]
+  batches       InventoryBatch[] @relation("BatchCashier")
   auditLogs     AuditLog[]
   syncOps       SyncOperation[]
 }
@@ -209,6 +210,7 @@ model Supplier {
 
   products  Product[]
   purchases Purchase[]
+  batches   InventoryBatch[]
 }
 
 model Product {
@@ -237,6 +239,7 @@ model Product {
   refundItems   RefundItem[]
   movements     InventoryMovement[]
   purchaseItems PurchaseItem[]
+  batchItems    InventoryBatchItem[]
 }
 
 model Customer {
@@ -446,4 +449,33 @@ model AuditLog {
   ipAddress String?
   userAgent String?
   createdAt DateTime @default(now())
+}
+
+model InventoryBatch {
+  id            String   @id @default(uuid())
+  batchNumber   String   @unique
+  cashierId     String?
+  cashier       User?    @relation("BatchCashier", fields: [cashierId], references: [id])
+  supplierId    String?
+  supplier      Supplier? @relation(fields: [supplierId], references: [id])
+  totalProducts Int      @default(0)
+  totalUnits    Int      @default(0)
+  clientBatchId String?  @unique
+  syncStatus    SyncStatus @default(SYNCED)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  items InventoryBatchItem[]
+}
+
+model InventoryBatchItem {
+  id          String         @id @default(uuid())
+  batchId     String
+  batch       InventoryBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+  productId   String
+  product     Product        @relation(fields: [productId], references: [id])
+  quantity    Int
+  stockBefore Int            @default(0)
+  stockAfter  Int            @default(0)
+  createdAt   DateTime       @default(now())
 }

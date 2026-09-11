@@ -196,6 +196,33 @@ export interface InventoryMovement {
   user?: User;
 }
 
+export interface InventoryBatchItem {
+  id: string;
+  batchId: string;
+  productId: string;
+  quantity: number;
+  stockBefore: number;
+  stockAfter: number;
+  createdAt: string;
+  product?: { id: string; name: string; sku: string };
+}
+
+export interface InventoryBatch {
+  id: string;
+  batchNumber: string;
+  cashierId?: string | null;
+  supplierId?: string | null;
+  totalProducts: number;
+  totalUnits: number;
+  clientBatchId?: string | null;
+  syncStatus?: string;
+  createdAt: string;
+  updatedAt?: string;
+  cashier?: { id: string; firstName: string; lastName: string; username: string } | null;
+  supplier?: { id: string; name: string } | null;
+  items?: InventoryBatchItem[];
+}
+
 export interface Business {
   id: string;
   name: string;
