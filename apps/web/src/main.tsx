@@ -4,11 +4,13 @@ import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
 import { initAuth, clearToken } from './lib/auth';
+import { initBarcodeScanner } from './lib/scanner';
 import './index.css';
 
 const APP_NAME = 'ONYX POS';
 
 initAuth();
+initBarcodeScanner();
 
 // Listen for auth expiry → return to login screen
 window.addEventListener('auth:logout', () => {

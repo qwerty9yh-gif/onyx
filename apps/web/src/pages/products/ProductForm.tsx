@@ -1,10 +1,12 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { api } from '../../lib/api';
+import { ScanBarcode, X } from 'lucide-react';
+import { api, handleApiError } from '../../lib/api';
+import { onBarcodeScan } from '../../lib/scanner';
 import { Product, Category, Supplier } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -80,8 +82,49 @@ export const ProductForm: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['inventory-products'] });
+      queryClient.invalidateQueries({ queryKey: ['incoming-products'] });
+      queryClient.invalidateQueries({ queryKey: ['product'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
     },
   });
+
+  // ── NB80 hardware barcode scanner: one-time barcode setup per product ──
+  const [scanning, setScanning] = useState(false);
+  const [scanNotice, setScanNotice] = useState('');
+  const scanningRef = useRef(false);
+  scanningRef.current = scanning;
+  const scanTimerRef = useRef<number | null>(null);
+
+  useEffect(() => onBarcodeScan((barcode: string) => {
+    if (!scanningRef.current) return;
+    const code = barcode.trim();
+    if (!code) return;
+    setValue('barcode', code, { shouldDirty: true, shouldValidate: true });
+    setScanning(false);
+    setScanNotice(`Barcode ${code} captured - tap Save to store it on this product`);
+    window.setTimeout(() => setScanNotice(''), 4000);
+    if (scanTimerRef.current) window.clearTimeout(scanTimerRef.current);
+  }), [setValue]);
+
+  const startScanning = (): void => {
+    setScanning(true);
+    setScanNotice('Press the NB80 scan button on the bottle now');
+    if (scanTimerRef.current) window.clearTimeout(scanTimerRef.current);
+    scanTimerRef.current = window.setTimeout(() => {
+      setScanning(false);
+      setScanNotice('');
+    }, 20000);
+  };
+
+  const cancelScanning = (): void => {
+    setScanning(false);
+    setScanNotice('');
+    if (scanTimerRef.current) window.clearTimeout(scanTimerRef.current);
+  };
+
+  useEffect(() => () => {
+    if (scanTimerRef.current) window.clearTimeout(scanTimerRef.current);
+  }, []);
 
     const onSubmit = (data: ProductFormData) => {
     mutation.mutate(data);
@@ -99,7 +142,17 @@ export const ProductForm: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <Input label="Name" placeholder="Product name" error={errors.name?.message} {...register('name')} />
           <Input label="SKU" placeholder="Stock Keeping Unit" error={errors.sku?.message} {...register('sku')} />
-          <Input label="Barcode" placeholder="Barcode (optional)" error={errors.barcode?.message} {...register('barcode')} />
+          <div>
+            <Input label="Barcode" placeholder="Barcode (optional or scan with NB80)" error={errors.barcode?.message} {...register('barcode')} />
+            <div className="mt-2 flex items-center gap-2">
+              <Button type="button" size="sm" variant={scanning ? 'danger' : 'secondary'} className="rounded-xl" onClick={scanning ? cancelScanning : startScanning}>
+                {scanning ? <X size={14} className="mr-1" /> : <ScanBarcode size={14} className="mr-1" />}
+                {scanning ? 'Cancel scan' : 'Scan Barcode'}
+              </Button>
+              {scanning && <span className="animate-pulse text-xs font-semibold text-brand-700">Press the NB80 scan button on the bottle…</span>}
+            </div>
+            {scanNotice && <p className="mt-1.5 text-xs font-semibold text-brand-700">{scanNotice}</p>}
+          </div>
           <Input label="Image URL" placeholder="https://..." error={errors.image?.message} {...register('image')} />
           <Input label="Cost Price (GH₵)" type="number" step="0.01" placeholder="0.00" error={errors.costPrice?.message} {...register('costPrice', { valueAsNumber: true })} />
           <Input label="Selling Price (GH₵)" type="number" step="0.01" placeholder="0.00" error={errors.sellingPrice?.message} {...register('sellingPrice', { valueAsNumber: true })} />
@@ -136,7 +189,7 @@ export const ProductForm: React.FC = () => {
 
         {mutation.isError && (
           <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">
-            {(mutation.error as Error)?.message || 'An error occurred'}
+            {handleApiError(mutation.error)}
           </div>
         )}
         {mutation.isSuccess && (

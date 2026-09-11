@@ -6,6 +6,7 @@ import { money } from '../../lib/helpers';
 import type { PaymentMethod, Product, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { clearCart, loadCart, loadProducts, loadQueue, markQueuedSaleFailed, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
+import { onBarcodeScan } from '../../lib/scanner';
 import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 
 interface CartItem {
@@ -128,6 +129,47 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
       const quantity = item.quantity + amount;
       return quantity > 0 ? [{ ...item, quantity }] : [];
     }));
+  };
+
+  // ── NB80 hardware barcode scanner: scan instantly adds the product to cart ──
+  const scanHandlerRef = useRef<(barcode: string) => void>(() => undefined);
+  scanHandlerRef.current = (barcode: string) => { void handleScan(barcode); };
+
+  useEffect(() => onBarcodeScan((barcode) => scanHandlerRef.current(barcode)), []);
+
+  const handleScan = async (barcode: string): Promise<void> => {
+    const code = barcode.trim();
+    if (!code) return;
+    // Match against the already-loaded product grid first (fast & offline-friendly).
+    const local = products.find((product) => product.barcode && product.barcode.trim() === code);
+    if (local) {
+      if (local.stockQuantity <= 0) {
+        setToast(`${local.name} is out of stock`);
+        window.setTimeout(() => setToast(''), 2500);
+        return;
+      }
+      addToCart(local);
+      return;
+    }
+    if (!online) {
+      setToast(`Barcode ${code} not found in the offline catalog`);
+      window.setTimeout(() => setToast(''), 3000);
+      return;
+    }
+    try {
+      const result = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
+      const product = result.data.data as Product;
+      saveProducts([...loadProducts<Product>().filter((p) => p.id !== product.id), product]);
+      if (product.stockQuantity <= 0) {
+        setToast(`${product.name} is out of stock`);
+        window.setTimeout(() => setToast(''), 2500);
+        return;
+      }
+      addToCart(product);
+    } catch {
+      setToast(`No product with barcode ${code}`);
+      window.setTimeout(() => setToast(''), 3000);
+    }
   };
 
   const buildReceiptData = (receiptNumber: string, markPaid: boolean): ReceiptData => ({

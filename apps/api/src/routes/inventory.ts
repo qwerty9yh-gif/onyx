@@ -16,7 +16,8 @@ const batchItemSchema = z.object({
 const createBatchSchema = z.object({
   supplierId: z.string().min(1).optional().nullable(),
   clientBatchId: z.string().min(1).max(120).optional().nullable(),
-  items: z.array(batchItemSchema).min(1).max(500),
+  // Hard cap: a single Incoming Goods commit supports up to 50 product lines.
+  items: z.array(batchItemSchema).min(1).max(50),
 });
 
 const batchInclude = {
@@ -28,22 +29,11 @@ const batchInclude = {
   },
 };
 
-async function nextBatchNumber(tx: {
-  inventoryBatch: { findFirst: (args: { orderBy: { batchNumber: 'desc' } }) => Promise<{ batchNumber: string } | null> };
-}): Promise<string> {
-  const last = await tx.inventoryBatch.findFirst({ orderBy: { batchNumber: 'desc' } });
-  let seq = 0;
-  if (last?.batchNumber) {
-    const m = last.batchNumber.match(/(\d+)\s*$/);
-    if (m) seq = parseInt(m[1], 10) || 0;
-  }
-  return `IG-${String(seq + 1).padStart(6, '0')}`;
-}
-
 // POST /api/inventory/batches — commit one receiving session as one batch.
 router.post('/batches', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    // Workers get full Incoming Goods access: search, add items, commit.
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const body = createBatchSchema.parse(req.body);
     if (body.supplierId) {
       const supplier = await prisma.supplier.findUnique({ where: { id: body.supplierId } });
@@ -59,12 +49,20 @@ router.post('/batches', async (req: AuthenticatedRequest, res, next) => {
       const dupe = await prisma.inventoryBatch.findUnique({ where: { clientBatchId: body.clientBatchId }, include: batchInclude });
       if (dupe) { res.json({ success: true, data: dupe, message: 'Batch already synced', deduped: true }); return; }
     }
+    const totalUnits = lines.reduce((s, l) => s + l.quantity, 0);
     let attempt = 0;
     for (;;) {
       try {
+        // Resolve the next batch number OUTSIDE the write transaction so the
+        // write only performs the inserts, then retry on unique collisions.
+        const last = await prisma.inventoryBatch.findFirst({ orderBy: { batchNumber: 'desc' } });
+        let seq = 0;
+        if (last?.batchNumber) {
+          const m = last.batchNumber.match(/(\d+)\s*$/);
+          if (m) seq = parseInt(m[1], 10) || 0;
+        }
+        const batchNumber = `IG-${String(seq + 1).padStart(6, '0')}`;
         const batch = await prisma.$transaction(async (tx) => {
-          const batchNumber = await nextBatchNumber(tx);
-          const totalUnits = lines.reduce((s, l) => s + l.quantity, 0);
           const created = await tx.inventoryBatch.create({
             data: {
               batchNumber, cashierId: req.user!.id, supplierId: body.supplierId || null,
@@ -72,23 +70,39 @@ router.post('/batches', async (req: AuthenticatedRequest, res, next) => {
               clientBatchId: body.clientBatchId || null, syncStatus: 'SYNCED',
             },
           });
+          const movements: Array<{
+            productId: string; userId: string; type: 'STOCK_IN'; quantity: number;
+            unitPrice: number; previousStock: number; newStock: number; reason: string; referenceId: string;
+          }> = [];
           for (const line of lines) {
             const product = byId.get(line.productId)!;
             const before = product.stockQuantity || 0;
             const updated = await tx.product.update({ where: { id: line.productId }, data: { stockQuantity: { increment: line.quantity } } });
-            await tx.inventoryBatchItem.create({ data: { batchId: created.id, productId: line.productId, quantity: line.quantity, stockBefore: before, stockAfter: updated.stockQuantity } });
-            await tx.inventoryMovement.create({
-              data: {
-                productId: line.productId, userId: req.user!.id, type: 'STOCK_IN',
-                quantity: line.quantity, unitPrice: product.costPrice || 0,
-                previousStock: before, newStock: updated.stockQuantity,
-                reason: 'Incoming goods batch', referenceId: created.id,
-              },
+            movements.push({
+              productId: line.productId, userId: req.user!.id, type: 'STOCK_IN',
+              quantity: line.quantity, unitPrice: product.costPrice || 0,
+              previousStock: before, newStock: updated.stockQuantity,
+              reason: 'Incoming goods batch', referenceId: created.id,
             });
           }
+          // Bulk inserts keep the commit fast even with 50+ product lines,
+          // well under the transaction timeout.
+          await tx.inventoryBatchItem.createMany({
+            data: lines.map((line) => {
+              const product = byId.get(line.productId)!;
+              return {
+                batchId: created.id,
+                productId: line.productId,
+                quantity: line.quantity,
+                stockBefore: product.stockQuantity || 0,
+                stockAfter: (product.stockQuantity || 0) + line.quantity,
+              };
+            }),
+          });
+          await tx.inventoryMovement.createMany({ data: movements });
           await tx.auditLog.create({ data: { userId: req.user!.id, action: 'COMMIT_INCOMING_BATCH', entity: 'inventory_batch', entityId: created.id, details: { batchNumber, totalProducts: lines.length, totalUnits } } });
           return tx.inventoryBatch.findUniqueOrThrow({ where: { id: created.id }, include: batchInclude });
-        });
+        }, { timeout: 60000 });
         res.status(201).json({ success: true, data: batch, message: 'Batch committed to inventory' });
         return;
       } catch (err: unknown) {
@@ -171,7 +185,7 @@ router.post('/adjust', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/inventory/stock-in - Stock in
 router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { productId, quantity, unitPrice, supplierId, purchaseOrder, notes } = req.body;
     if (!productId || !quantity || quantity <= 0) throw new AppError('Valid product and quantity required', 400);
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -196,7 +210,7 @@ router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/inventory/receive - Record a simple incoming-goods receipt.
 router.post('/receive', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { supplierId, productId, quantity } = req.body;
     const parsedQuantity = Number(quantity);
     if (!supplierId || !productId || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {

@@ -106,12 +106,15 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
   try {
     if (!['ADMIN','MANAGER','INVENTORY_STAFF'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const d = createSchema.parse(req.body);
+    // Normalize empty barcode strings to NULL so multiple products without a
+    // barcode never collide on the DB unique constraint.
+    const barcode: string | null = typeof d.barcode === 'string' && d.barcode.trim() ? d.barcode.trim() : null;
     if (await prisma.product.findUnique({ where: { sku: d.sku } })) throw new AppError('SKU exists', 409);
-    if (d.barcode && await prisma.product.findFirst({ where: { barcode: d.barcode } })) throw new AppError('Barcode exists', 409);
+    if (barcode && await prisma.product.findFirst({ where: { barcode } })) throw new AppError('Barcode exists', 409);
     if (d.categoryId) { const c = await prisma.category.findUnique({ where: { id: d.categoryId } }); if (!c) throw new AppError('Category not found', 404); }
     if (d.supplierId) { const s = await prisma.supplier.findUnique({ where: { id: d.supplierId } }); if (!s) throw new AppError('Supplier not found', 404); }
-    const prod = await prisma.product.create({ data: { ...d, categoryId: d.categoryId || null, supplierId: d.supplierId || null, localId: generateLocalId() } });
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_PRODUCT', entity: 'product', entityId: prod.id, details: { name: prod.name, sku: prod.sku } } });
+    const prod = await prisma.product.create({ data: { ...d, barcode, categoryId: d.categoryId || null, supplierId: d.supplierId || null, localId: generateLocalId() } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'CREATE_PRODUCT', entity: 'product', entityId: prod.id, details: { name: prod.name, sku: prod.sku, barcode } } });
     res.status(201).json({ success: true, data: prod });
   } catch (err) { next(err); }
 });
@@ -123,10 +126,15 @@ router.put('/:id', async (req: AuthenticatedRequest, res, next) => {
     const d = updateSchema.parse(req.body);
     const existing = await prisma.product.findUnique({ where: { id: req.params.id } });
     if (!existing || existing.deletedAt) throw new AppError('Not found', 404);
+    // Normalize empty barcode strings to NULL; an empty string sent from the
+    // form means "no barcode" and must not violate the unique constraint.
+    const barcode: string | null = d.barcode === undefined
+      ? (existing.barcode ?? null)
+      : (typeof d.barcode === 'string' && d.barcode.trim() ? d.barcode.trim() : null);
     if (d.sku && d.sku !== existing.sku && await prisma.product.findUnique({ where: { sku: d.sku } })) throw new AppError('SKU exists', 409);
-    if (d.barcode && d.barcode !== existing.barcode && await prisma.product.findFirst({ where: { barcode: d.barcode, id: { not: req.params.id } } })) throw new AppError('Barcode exists', 409);
-    const prod = await prisma.product.update({ where: { id: req.params.id }, data: { ...d } });
-    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_PRODUCT', entity: 'product', entityId: prod.id, details: { changes: d } } });
+    if (barcode && barcode !== existing.barcode && await prisma.product.findFirst({ where: { barcode, id: { not: req.params.id } } })) throw new AppError('Barcode exists', 409);
+    const prod = await prisma.product.update({ where: { id: req.params.id }, data: { ...d, barcode } });
+    await prisma.auditLog.create({ data: { userId: req.user!.id, action: 'UPDATE_PRODUCT', entity: 'product', entityId: prod.id, details: { changes: d, barcode } } });
     res.json({ success: true, data: prod });
   } catch (err) { next(err); }
 });

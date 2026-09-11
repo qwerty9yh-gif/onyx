@@ -1,4 +1,4 @@
-﻿import React, { useEffect, useMemo, useState } from 'react';
+﻿import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   Truck, History as HistoryIcon, Search, Plus, Minus, Trash2, PackagePlus,
@@ -16,6 +16,7 @@ import {
   type OfflineIncomingBatch,
 } from '../../lib/offline';
 import { printReceivingReport, type ReceivingReport } from '../../lib/printer';
+import { onBarcodeScan } from '../../lib/scanner';
 import type { InventoryBatch, Product, Supplier } from '../../lib/types';
 
 interface CartItem {
@@ -117,6 +118,36 @@ export const IncomingPage: React.FC = () => {
     setProductSearch('');
     setNotice(`Added ${selected.name} to the incoming cart`);
     window.setTimeout(() => setNotice(''), 2200);
+  };
+
+  // ── NB80 hardware barcode scanner: scanning selects the matching product ──
+  const scanHandlerRef = useRef<(barcode: string) => void>(() => undefined);
+  scanHandlerRef.current = (barcode: string) => { void handleScan(barcode); };
+
+  useEffect(() => onBarcodeScan((barcode) => scanHandlerRef.current(barcode)), []);
+
+  const handleScan = async (barcode: string): Promise<void> => {
+    const code = barcode.trim();
+    if (!code) return;
+    let product = (productOptions.data || []).find((p) => p.barcode && p.barcode.trim() === code);
+    if (!product && navigator.onLine) {
+      try {
+        const result = await api.get(`/products/barcode/${encodeURIComponent(code)}`);
+        product = result.data.data as Product;
+      } catch {
+        product = undefined;
+      }
+    }
+    if (product) {
+      setSelected(product);
+      setProductSearch(product.name);
+      setQuantity('');
+      setNotice(`Scanned ${product.name} - enter the quantity and tap Add`);
+      window.setTimeout(() => setNotice(''), 2600);
+    } else {
+      setNotice(`No product found for barcode ${code}`);
+      window.setTimeout(() => setNotice(''), 3000);
+    }
   };
 
   const changeQty = (productId: string, delta: number): void => {
@@ -390,7 +421,14 @@ export const IncomingPage: React.FC = () => {
               ))}
               {!cart.length && <div className="rounded-2xl border border-dashed border-sky-300 p-8 text-center text-sm text-slate-500">Search a product and tap <strong>Add to Incoming Cart</strong>. Add as many products as you need.</div>}
             </div>
-            <Button className="mt-5 h-14 w-full rounded-2xl bg-emerald-600 text-base font-bold hover:bg-emerald-700" loading={commit.isPending} disabled={!cart.length} onClick={() => commit.mutate()}>
+            <Button className="mt-5 h-14 w-full rounded-2xl bg-emerald-600 text-base font-bold hover:bg-emerald-700" loading={commit.isPending} disabled={!cart.length} onClick={() => {
+              if (cart.length > 50) {
+                setNotice('Maximum 50 products per commit - split into two batches');
+                window.setTimeout(() => setNotice(''), 3500);
+                return;
+              }
+              commit.mutate();
+            }}>
               <CheckCircle2 size={20} className="mr-2" /> Commit to Inventory
             </Button>
             <p className="mt-2 text-center text-xs text-slate-500">Stock updates instantly - report prints automatically</p>

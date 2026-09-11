@@ -27,6 +27,7 @@ import { SettingsPage } from './pages/settings/SettingsPage';
 import { SyncPage } from './pages/SyncPage';
 import { TransactionsPage } from './pages/transactions/TransactionsPage';
 import { IncomingPage } from './pages/incoming/IncomingPage';
+import { NotificationsPage } from './pages/notifications/NotificationsPage';
 import { ChangePasswordPage } from './pages/auth/ChangePasswordPage';
 
 const RequireAuth = () => {
@@ -118,6 +119,7 @@ function App() {
           <Route path="/sales" element={<SalesPage />} />
           <Route path="/transactions" element={<TransactionsPage />} />
           <Route path="/incoming" element={<IncomingPage />} />
+          <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/sales/:id/receipt" element={<ReceiptPage />} />
           <Route element={<RequireRole roles={['ADMIN', 'MANAGER', 'INVENTORY_STAFF']} />}>

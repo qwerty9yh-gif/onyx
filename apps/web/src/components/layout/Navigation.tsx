@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
-import { BarChart3, Boxes, LayoutDashboard, Package, Receipt, Settings, ShoppingBasket, ShoppingCart, Truck, UserCog, Users } from 'lucide-react';
+import { BarChart3, BellRing, Boxes, LayoutDashboard, Package, Receipt, Settings, ShoppingBasket, ShoppingCart, Truck, UserCog, Users } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../lib/api';
 import { getUser } from '../../lib/auth';
@@ -39,6 +39,7 @@ const NAV_ENTRIES: NavEntry[] = [
   { to: '/sales', icon: <ShoppingCart size={18} />, label: 'Sales' },
   { to: '/transactions', icon: <Receipt size={18} />, label: 'Transactions' },
   { to: '/incoming', icon: <Truck size={18} />, label: 'Incoming' },
+  { to: '/notifications', icon: <BellRing size={18} />, label: 'Notifications' },
   { to: '/products', icon: <Package size={18} />, label: 'Products', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/purchases', icon: <ShoppingBasket size={18} />, label: 'Purchases', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },
   { to: '/inventory', icon: <Boxes size={18} />, label: 'Inventory', roles: ['ADMIN', 'MANAGER', 'INVENTORY_STAFF'] },

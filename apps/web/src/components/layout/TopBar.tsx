@@ -41,7 +41,7 @@ export const TopBar: React.FC<{ onMenuClick: () => void }> = ({ onMenuClick }) =
       <div className="flex items-center gap-4">
         {me && (
           <>
-            <button type="button" onClick={() => navigate('/inventory')} className={`relative rounded-xl p-2 transition ${lowStock.length ? 'bg-red-50 text-red-700 shadow-glow-red' : 'text-slate-500 hover:bg-slate-100'}`} title={lowStock.length ? `${lowStock.length} low-stock alerts` : 'Notifications'} aria-label={lowStock.length ? `${lowStock.length} low-stock alerts` : 'Notifications'}>
+            <button type="button" onClick={() => navigate('/notifications')} className={`relative rounded-xl p-2 transition ${lowStock.length ? 'bg-red-50 text-red-700 shadow-glow-red' : 'text-slate-500 hover:bg-slate-100'}`} title={lowStock.length ? `${lowStock.length} low-stock alerts` : 'Notifications'} aria-label={lowStock.length ? `${lowStock.length} low-stock alerts` : 'Notifications'}>
               <Bell size={18} />
               {lowStock.length > 0 && <span className="absolute -right-1 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-600 px-1 text-[10px] font-bold text-white">{lowStock.length}</span>}
             </button>
