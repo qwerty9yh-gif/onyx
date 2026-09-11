@@ -73,14 +73,8 @@ export const LoginPage: React.FC = () => {
     setBusy(true);
     setError('');
     try {
-      console.log('[ONYX LOGIN] Attempting login for:', selected.id);
-      console.log('[ONYX LOGIN] Password length:', password.length, 'characters');
       const user = await loginByCard(selected.id, password);
-      console.log('[ONYX LOGIN] Login response status: 200 OK');
-      console.log('[ONYX LOGIN] Token stored successfully:', !!getToken());
-      console.log('[ONYX LOGIN] User authenticated:', user?.email);
       const dest = user.mustChangePassword ? '/change-password' : (from || homeFor(selected.role));
-      console.log('[ONYX LOGIN] Redirecting to:', dest);
       queryClient.setQueryData(['me'], user);
       setBusy(false);
       setSelected(null);
@@ -90,12 +84,9 @@ export const LoginPage: React.FC = () => {
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number } };
       const status = axiosErr?.response?.status;
-      console.log('[ONYX LOGIN] Login response status:', status);
       if (status === 401) {
-        console.log('[ONYX LOGIN] 401 Unauthorized - wrong password');
         setError('Invalid password. Please try again.');
       } else {
-        console.log('[ONYX LOGIN] Login failed — status:', status || 'unknown');
         setError(handleApiError(err));
       }
       setBusy(false);
@@ -121,7 +112,7 @@ export const LoginPage: React.FC = () => {
       className="onyx-layered-card group flex min-h-48 flex-col items-center rounded-3xl border border-red-100 bg-white/90 p-3 text-center shadow-lg shadow-red-950/10 backdrop-blur transition duration-200 hover:-translate-y-1 hover:shadow-xl hover:ring-2 hover:ring-brand-400 sm:p-5 animate-fade-in"
     >
       <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-700 text-lg font-extrabold text-white shadow-glow-red sm:h-16 sm:w-16 sm:text-xl">
-        {(user.firstName?.[0] || '?') + (user.lastName?.[0] || '')}
+        {(user.firstName?.[0] || 'U') + (user.lastName?.[0] || '')}
       </div>
       <div className="mt-3 min-w-0">
         <p className="truncate font-bold text-slate-800">{user.firstName} {user.lastName}</p>
@@ -198,7 +189,7 @@ return (
 
             <div className="mt-7 flex flex-col items-center">
               <div className="flex h-24 w-24 items-center justify-center rounded-3xl bg-brand-700 text-3xl font-extrabold text-white shadow-glow-red">
-                {(selected.firstName?.[0] || '?') + (selected.lastName?.[0] || '')}
+                {(selected.firstName?.[0] || 'U') + (selected.lastName?.[0] || '')}
               </div>
               <p className="mt-3 text-xl font-bold text-slate-900">{selected.firstName} {selected.lastName}</p>
               <p className="text-xs uppercase tracking-widest text-slate-400">{ROLE_LABEL[selected.role] || selected.role}</p>

@@ -41,13 +41,13 @@ export const CustomersPage: React.FC = () => {
 
   const messageMutation = useMutation({
     mutationFn: () => messageCustomer(messageTarget!.id, msgTitle, msgBody),
-    onSuccess: () => setFeedback('Message sent ✓'),
+    onSuccess: () => setFeedback('Message sent successfully.'),
     onError: (err) => setFeedback(handleApiError(err)),
   });
 
   const broadcastMutation = useMutation({
     mutationFn: () => broadcastCustomerSms(bcTitle, bcBody),
-    onSuccess: (res) => setFeedback(`Broadcast sent to ${res.sent} customer${res.sent === 1 ? '' : 's'}${res.failed ? ` (${res.failed} failed)` : ''} ✓`),
+    onSuccess: (res) => setFeedback(`Broadcast sent to ${res.sent} customer${res.sent === 1 ? '' : 's'}${res.failed ? ` (${res.failed} failed)` : ''}.`),
     onError: (err) => setFeedback(handleApiError(err)),
   });
 
@@ -138,7 +138,7 @@ const openMessage = (row: CustomerRow) => {
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">Message</label>
             <textarea value={msgBody} onChange={(e) => setMsgBody(e.target.value)} placeholder="Type your message…" rows={4} className="w-full rounded-xl border border-red-100 bg-red-50/60 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/30" />
           </div>
-          {feedback && <p className={`text-sm font-medium ${feedback.includes('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{feedback}</p>}
+          {feedback && <p className="text-sm font-medium text-emerald-700">{feedback}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setMessageTarget(null)}>Cancel</Button>
             <Button loading={messageMutation.isPending} disabled={!messageTarget?.phone || !msgBody.trim()} onClick={() => messageMutation.mutate()}><Send size={16} />Send message</Button>
@@ -154,7 +154,7 @@ const openMessage = (row: CustomerRow) => {
             <label className="mb-1.5 block text-sm font-semibold text-slate-700">Message</label>
             <textarea value={bcBody} onChange={(e) => setBcBody(e.target.value)} placeholder="Type your announcement…" rows={4} className="w-full rounded-xl border border-red-100 bg-red-50/60 px-3.5 py-2.5 text-sm outline-none transition placeholder:text-slate-400 focus:border-brand-400 focus:bg-white focus:ring-2 focus:ring-brand-500/30" />
           </div>
-          {feedback && <p className={`text-sm font-medium ${feedback.includes('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{feedback}</p>}
+          {feedback && <p className="text-sm font-medium text-emerald-700">{feedback}</p>}
           <div className="flex justify-end gap-2">
             <Button variant="ghost" onClick={() => setBroadcastOpen(false)}>Cancel</Button>
             <Button loading={broadcastMutation.isPending} disabled={!bcBody.trim()} onClick={() => broadcastMutation.mutate()}><Megaphone size={16} />Send broadcast</Button>

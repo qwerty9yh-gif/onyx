@@ -83,7 +83,7 @@ const filtered = useMemo(() => sales
     setSmsMsg('');
     try {
       const result = await sendSmsInvoice(selected.id, smsPhone);
-      setSmsMsg(result.success ? `SMS invoice sent ✓ (${result.messageId || 'ok'})` : (result.error || 'SMS could not be sent'));
+      setSmsMsg(result.success ? `SMS invoice sent successfully (${result.messageId || 'confirmed'})` : (result.error || 'SMS could not be sent'));
     } catch (sendError) {
       setSmsMsg('SMS could not be sent');
     }
@@ -160,7 +160,7 @@ return <div className="mx-auto max-w-6xl space-y-6">
               <div className="space-y-3 rounded-2xl border border-brand-200 bg-red-50/50 p-3">
                 <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Send size={13} /> Send invoice by SMS</p>
                 <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500" size={15} /><input value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)} placeholder="Customer phone" className="h-11 w-full rounded-xl border border-red-100 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-red-300" /></div>
-                {smsMsg && <p className={`text-xs font-medium ${smsMsg.includes('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
+                {smsMsg && <p className={`text-xs font-medium ${smsMsg.includes('successfully') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
                 <Button className="w-full rounded-xl bg-brand-700 text-white hover:bg-brand-800" variant="primary" loading={smsBusy} disabled={!smsPhone} onClick={sendSms}><Send size={16} />Send SMS invoice</Button>
               </div>
             )}

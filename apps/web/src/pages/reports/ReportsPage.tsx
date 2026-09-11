@@ -22,7 +22,7 @@ interface MetaBlock {
 function MetaValue({ value }: { value: unknown }) {
   if (value === null || value === undefined) return <span>—</span>;
   if (typeof value === 'number') return <span>{money(value)}</span>;
-  if (typeof value === 'object') return <span className="text-gray-400">[data]</span>;
+  if (typeof value === 'object') return <span className="text-gray-400">Details available</span>;
   return <span>{String(value)}</span>;
 }
 
@@ -85,9 +85,6 @@ export const ReportsPage: React.FC = () => {
             {Object.keys(meta).length === 0 && (
               <p className="text-sm text-gray-500">No summary data available.</p>
             )}
-            <p className="mt-6 text-xs text-gray-400">
-              Detailed {tab} data is available via the API at <code>/api/reports/{tab}</code>.
-            </p>
           </>
         )}
       </div>

@@ -32,12 +32,10 @@ import { ChangePasswordPage } from './pages/auth/ChangePasswordPage';
 const RequireAuth = () => {
   const location = useLocation();
   const hasToken = !!getToken();
-  console.log('[ONYX AUTH] RequireAuth - token present:', hasToken);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['me'],
     queryFn: async () => {
-      console.log('[ONYX AUTH] Fetching /auth/me with token:', !!getToken());
       try {
         return (await api.get('/auth/me')).data.data;
       } catch (error) {
@@ -60,7 +58,6 @@ const RequireAuth = () => {
   }
 
   if (!user) {
-    console.log('[ONYX AUTH] No user - redirecting to login');
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 

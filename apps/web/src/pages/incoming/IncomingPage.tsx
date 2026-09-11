@@ -54,19 +54,19 @@ export const IncomingPage: React.FC = () => {
   const [online, setOnline] = useState(navigator.onLine);
   const [notice, setNotice] = useState('');
 
-  // â”€â”€ Incoming cart (separate from the Sales cart) â”€â”€
+  // Incoming cart is separate from the Sales cart.
   const [cart, setCart] = useState<CartItem[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [selected, setSelected] = useState<Product | null>(null);
   const [quantity, setQuantity] = useState('');
   const [supplierId, setSupplierId] = useState('');
 
-  // â”€â”€ Post-commit popups â”€â”€
+  // Post-commit report dialogs.
   const [successReport, setSuccessReport] = useState<ReceivingReport | null>(null);
   const [successOffline, setSuccessOffline] = useState(false);
   const [viewReport, setViewReport] = useState<ReceivingReport | null>(null);
 
-  // â”€â”€ History â”€â”€
+  // Receiving history.
   const [historyPage, setHistoryPage] = useState(1);
   const [historySearch, setHistorySearch] = useState('');
   const [detail, setDetail] = useState<{ batch: InventoryBatch | null; offlineBatch: OfflineIncomingBatch | null } | null>(null);
@@ -199,7 +199,7 @@ export const IncomingPage: React.FC = () => {
       }
       if (loadPendingIncomingBatches().length === 0) {
         queryClient.invalidateQueries();
-        setNotice('Offline batches synced â€” inventory is up to date');
+        setNotice('Offline batches synced - inventory is up to date');
         window.setTimeout(() => setNotice(''), 3500);
       }
     };
@@ -295,11 +295,11 @@ export const IncomingPage: React.FC = () => {
         <div>
           <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Inventory</p>
           <h1 className="text-3xl font-bold text-slate-900">Incoming Goods</h1>
-          <p className="mt-1 text-sm text-slate-500">Receive deliveries in batches â€” stock updates instantly and a report prints automatically.</p>
+          <p className="mt-1 text-sm text-slate-500">Receive deliveries in batches. Stock updates instantly and a report prints automatically.</p>
         </div>
         <div className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold ${online ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-800'}`}>
           {online ? <Wifi size={16} /> : <WifiOff size={16} />}
-          {online ? 'Online' : `Offline${pendingBatches.length ? ` Â· ${pendingBatches.length} pending sync` : ''}`}
+          {online ? 'Online' : `Offline${pendingBatches.length ? ` - ${pendingBatches.length} pending sync` : ''}`}
         </div>
       </header>
 
@@ -316,7 +316,7 @@ export const IncomingPage: React.FC = () => {
       {pendingBatches.length > 0 && (
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800" role="status">
           <ClipboardList size={15} className="mr-2 inline" />
-          {pendingBatches.length} offline batch{pendingBatches.length === 1 ? '' : 'es'} saved locally â€” they will sync automatically when internet returns.
+          {pendingBatches.length} offline batch{pendingBatches.length === 1 ? '' : 'es'} saved locally. They will sync automatically when internet returns.
         </div>
       )}
       {tab === 'receive' && (
@@ -331,7 +331,7 @@ export const IncomingPage: React.FC = () => {
                 </select>
               </label>
               <label className="mt-4 block text-sm font-semibold text-slate-700">
-                1 Â· Search product
+                  1 - Search product
                 <div className="relative mt-2">
                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700" size={18} />
                   <input value={productSearch} onChange={(event) => { setProductSearch(event.target.value); setSelected(null); }} placeholder="Search by product name or SKU" className="h-12 w-full rounded-2xl bg-slate-100 pl-10 pr-3 outline-none focus:ring-2 focus:ring-red-300" />
@@ -342,7 +342,7 @@ export const IncomingPage: React.FC = () => {
                   {(productOptions.data || []).map((product) => (
                     <button type="button" key={product.id} onClick={() => { setSelected(product); setQuantity(''); }} className={`block w-full border-b border-slate-100 px-4 py-3 text-left last:border-0 hover:bg-red-50 ${selected?.id === product.id ? 'bg-red-50' : ''}`}>
                       <span className="font-semibold">{product.name}</span>
-                      <span className="ml-2 text-xs text-slate-500">{product.sku} Â· Stock {product.stockQuantity}</span>
+                      <span className="ml-2 text-xs text-slate-500">{product.sku} - Stock {product.stockQuantity}</span>
                     </button>
                   ))}
                   {productOptions.isLoading && <p className="p-4 text-sm text-slate-500">Searching...</p>}
@@ -351,10 +351,10 @@ export const IncomingPage: React.FC = () => {
               )}
               {selected && (
                 <div className="mt-4 rounded-2xl bg-red-50/70 p-4">
-                  <p className="text-sm font-bold text-slate-800">2 Â· {selected.name} <span className="ml-1 font-normal text-slate-500">({selected.sku})</span></p>
-                  <p className="mt-1 text-xs text-slate-500">Current stock: <strong>{selected.stockQuantity}</strong> Â· New stock: <strong className="text-emerald-700">{(selected.stockQuantity || 0) + (parseInt(quantity, 10) || 0)}</strong></p>
+                  <p className="text-sm font-bold text-slate-800">2 - {selected.name} <span className="ml-1 font-normal text-slate-500">({selected.sku})</span></p>
+                  <p className="mt-1 text-xs text-slate-500">Current stock: <strong>{selected.stockQuantity}</strong> - New stock: <strong className="text-emerald-700">{(selected.stockQuantity || 0) + (parseInt(quantity, 10) || 0)}</strong></p>
                   <div className="mt-3 flex gap-2">
-                    <input type="number" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="3 Â· Quantity received" className="h-12 flex-1 rounded-2xl bg-white px-3 outline-none ring-2 ring-transparent focus:ring-red-300" />
+                    <input type="number" min="1" step="1" value={quantity} onChange={(event) => setQuantity(event.target.value)} placeholder="3 - Quantity received" className="h-12 flex-1 rounded-2xl bg-white px-3 outline-none ring-2 ring-transparent focus:ring-red-300" />
                     <Button className="h-12 rounded-2xl" disabled={!Number.isInteger(Number(quantity)) || Number(quantity) <= 0} onClick={addToCart}>
                       <PackagePlus size={18} className="mr-2" /> Add to Incoming Cart
                     </Button>
@@ -367,7 +367,7 @@ export const IncomingPage: React.FC = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-semibold text-brand-700">Incoming cart</p>
-                <h2 className="text-xl font-bold text-slate-900">{cart.length} product{cart.length === 1 ? '' : 's'} Â· {totalUnits} unit{totalUnits === 1 ? '' : 's'}</h2>
+                <h2 className="text-xl font-bold text-slate-900">{cart.length} product{cart.length === 1 ? '' : 's'} - {totalUnits} unit{totalUnits === 1 ? '' : 's'}</h2>
               </div>
               {cart.length > 0 && <button type="button" onClick={() => setCart([])} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button>}
             </div>
@@ -377,7 +377,7 @@ export const IncomingPage: React.FC = () => {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="truncate font-semibold text-slate-800">{item.name}</p>
-                      <p className="text-xs text-slate-500">Stock {item.stockBefore} â†’ <strong className="text-emerald-700">{item.stockBefore + item.quantity}</strong></p>
+                      <p className="text-xs text-slate-500">Stock {item.stockBefore} to <strong className="text-emerald-700">{item.stockBefore + item.quantity}</strong></p>
                     </div>
                     <button type="button" onClick={() => setCart((current) => current.filter((line) => line.productId !== item.productId))} className="rounded-xl p-1.5 text-slate-400 hover:bg-red-100 hover:text-red-600" title="Remove"><Trash2 size={15} /></button>
                   </div>
@@ -393,7 +393,7 @@ export const IncomingPage: React.FC = () => {
             <Button className="mt-5 h-14 w-full rounded-2xl bg-emerald-600 text-base font-bold hover:bg-emerald-700" loading={commit.isPending} disabled={!cart.length} onClick={() => commit.mutate()}>
               <CheckCircle2 size={20} className="mr-2" /> Commit to Inventory
             </Button>
-            <p className="mt-2 text-center text-xs text-slate-500">Stock updates instantly Â· report prints automatically</p>
+            <p className="mt-2 text-center text-xs text-slate-500">Stock updates instantly - report prints automatically</p>
             {commit.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(commit.error)}</p>}
           </aside>
         </div>
@@ -414,8 +414,8 @@ export const IncomingPage: React.FC = () => {
                   {card.pendingSync ? <Badge variant="warning">Pending sync</Badge> : <Badge variant="success">Synced</Badge>}
                 </div>
                 <h3 className="mt-3 text-lg font-bold text-slate-900">Batch #{card.batchNumber}</h3>
-                <p className="mt-1 flex items-center gap-1 text-sm text-slate-500"><Clock size={13} /> {fmtDate(card.createdAt)} Â· {fmtTime(card.createdAt)}</p>
-                <p className="mt-1 text-sm text-slate-600">{card.totalProducts} products Â· {card.totalUnits} units</p>
+                <p className="mt-1 flex items-center gap-1 text-sm text-slate-500"><Clock size={13} /> {fmtDate(card.createdAt)} - {fmtTime(card.createdAt)}</p>
+                <p className="mt-1 text-sm text-slate-600">{card.totalProducts} products - {card.totalUnits} units</p>
                 <p className="text-sm text-slate-500">Received by {card.staffName}</p>
                 <div className="mt-4 grid grid-cols-2 gap-2">
                   <Button size="sm" className="rounded-xl" onClick={() => void openDetail(card.id)}><Eye size={14} className="mr-1" /> Open</Button>
@@ -439,7 +439,7 @@ export const IncomingPage: React.FC = () => {
             <div className="flex items-center gap-3 rounded-2xl bg-emerald-50 p-4 text-sm text-emerald-800">
               <CheckCircle2 size={22} className="shrink-0" />
               <div>
-                <p className="font-bold">{successOffline ? 'Saved locally â€” will sync automatically.' : `Batch #${successReport.batchNumber} saved.`}</p>
+                <p className="font-bold">{successOffline ? 'Saved locally. It will sync automatically.' : `Batch #${successReport.batchNumber} saved.`}</p>
                 <p>Stock updated across ONYX POS and the receiving report{successOffline ? ' was prepared' : ' printed'}.</p>
               </div>
             </div>
@@ -453,7 +453,7 @@ export const IncomingPage: React.FC = () => {
       </Modal>
 
       {/* On-screen report viewer */}
-      <Modal open={Boolean(viewReport)} onClose={() => setViewReport(null)} title={viewReport ? `Receiving Report â€” Batch #${viewReport.batchNumber}` : ''} size="md">
+      <Modal open={Boolean(viewReport)} onClose={() => setViewReport(null)} title={viewReport ? `Receiving Report - Batch #${viewReport.batchNumber}` : ''} size="md">
         {viewReport && (
           <div className="space-y-4">
             <div className="rounded-2xl bg-slate-50 p-4 text-sm">
@@ -505,7 +505,7 @@ export const IncomingPage: React.FC = () => {
                 <tbody className="divide-y divide-slate-100">
                   {detail.offlineBatch
                     ? detail.offlineBatch.snapshot.map((line) => (
-                        <tr key={line.productId}><td className="py-2 font-medium">{line.name}</td><td className="py-2 text-center font-bold">{line.quantity}</td><td className="py-2 text-right text-xs text-slate-500">{line.stockBefore} â†’ {line.stockAfter}</td></tr>
+                        <tr key={line.productId}><td className="py-2 font-medium">{line.name}</td><td className="py-2 text-center font-bold">{line.quantity}</td><td className="py-2 text-right text-xs text-slate-500">{line.stockBefore} to {line.stockAfter}</td></tr>
                       ))
                     : (detail.batch?.items || []).map((item) => (
                         <tr key={item.id}><td className="py-2 font-medium">{item.product?.name || 'Product'}</td><td className="py-2 text-center font-bold">{item.quantity}</td></tr>

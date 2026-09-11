@@ -46,7 +46,7 @@ export const ReceiptPage: React.FC = () => {
     setSmsMsg('');
     try {
       const result = await sendSmsInvoice(id, smsPhone.trim());
-      setSmsMsg(result.success ? 'SMS receipt sent ✓' : (result.error || 'SMS could not be sent'));
+      setSmsMsg(result.success ? 'SMS receipt sent successfully' : (result.error || 'SMS could not be sent'));
     } catch {
       setSmsMsg('SMS could not be sent');
     }
@@ -110,7 +110,7 @@ return (
             </div>
             <Button className="rounded-xl bg-brand-700 text-white hover:bg-brand-800" loading={smsBusy} disabled={!smsPhone.trim()} onClick={sendSms}><Send size={16} />Send SMS</Button>
           </div>
-          {smsMsg && <p className={`mt-2 text-xs font-medium ${smsMsg.includes('✓') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
+          {smsMsg && <p className={`mt-2 text-xs font-medium ${smsMsg.includes('successfully') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
         </section>
       )}
     </div>

@@ -12,11 +12,9 @@ initAuth();
 
 // Listen for auth expiry → return to login screen
 window.addEventListener('auth:logout', () => {
-  console.log('[ONYX AUTH] auth:logout event received');
   clearToken();
   const current = window.location.pathname;
   if (!current.startsWith('/login')) {
-    console.log('[ONYX AUTH] Redirecting to login');
     window.location.href = `${import.meta.env.BASE_URL}login`;
   }
 });

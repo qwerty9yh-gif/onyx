@@ -240,7 +240,7 @@ export const UsersPage: React.FC = () => {
                   <td className="px-4 py-3">
                     <button onClick={() => openFor(u, 'manage')} className="text-left">
                       <p className="font-bold text-slate-900 hover:text-brand-700">{displayName(u)}</p>
-                      <p className="text-xs text-slate-500">@{u.username} â€¢ {u.email}</p>
+                      <p className="text-xs text-slate-500">@{u.username} · {u.email}</p>
                     </button>
                     {u.mustChangePassword && <span className="mt-1 inline-block rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold uppercase text-amber-700">Must change password</span>}
                   </td>
@@ -265,7 +265,7 @@ export const UsersPage: React.FC = () => {
           </table>
         </div>
         <div className="flex items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-sm text-slate-600">
-          <span>Total {total} accounts â€¢ Page {page} of {totalPages}</span>
+          <span>Total {total} accounts · Page {page} of {totalPages}</span>
           <div className="flex gap-2">
             <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>Previous</Button>
             <Button size="sm" variant="outline" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>

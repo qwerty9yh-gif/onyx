@@ -33,22 +33,16 @@ export function setUser(user: User): void {
  * This function throws a typed error so the UI can show "Wrong password." */
 export async function loginByCard(userId: string, password: string) {
   const res = await api.post('/auth/card-login', { userId, password });
-  console.log('[ONYX AUTH] card-login response status:', res.status);
   if (res.status !== 200) {
     throw new Error(` card-login returned ${res.status} `);
   }
   const { token, user } = res.data.data;
-  console.log('[ONYX AUTH] Token received:', token ? 'yes' : 'no');
   if (!token) {
-    console.log('[ONYX AUTH] No token in response — aborting');
     throw new Error('No token received from server');
   }
   setToken(token);
   setUser(user);
   api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-  console.log('[ONYX AUTH] Token stored in localStorage:', !!getToken());
-  console.log('[ONYX AUTH] Authorization header set:', !!api.defaults.headers.common['Authorization']);
-  console.log('[ONYX AUTH] User set in storage:', user?.email);
   return user;
 }
 
@@ -65,8 +59,5 @@ export function initAuth() {
   const token = getToken();
   if (token) {
     api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-    console.log('[ONYX AUTH] initAuth - token loaded from storage');
-  } else {
-    console.log('[ONYX AUTH] initAuth - no token found');
   }
 }

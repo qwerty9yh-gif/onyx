@@ -14,9 +14,6 @@ api.interceptors.request.use((config) => {
   const hasAuth = !!config.headers?.Authorization;
   if (storedToken && !hasAuth) {
     config.headers.Authorization = `Bearer ${storedToken}`;
-    console.log('[ONYX API] Attached stored token to request:', config.url);
-  } else if (!storedToken && !hasAuth) {
-    console.log('[ONYX API] Request without auth token:', config.url);
   }
   return config;
 });
@@ -26,9 +23,7 @@ api.interceptors.response.use(
   (error) => {
     const status = error.response?.status;
     const path = error.config?.url || '';
-    console.log('[ONYX API] Response status:', status, 'for path:', path);
     if (status === 401 && !SKIP_LOGOUT_PATHS.some((p) => path.includes(p))) {
-      console.log('[ONYX API] Unauthorized - triggering logout');
       window.dispatchEvent(new Event('auth:logout'));
     }
     return Promise.reject(error);
