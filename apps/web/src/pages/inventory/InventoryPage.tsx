@@ -39,21 +39,21 @@ export const InventoryPage: React.FC = () => {
           {products.map((product) => {
             const [label, tone] = stockState(product);
             return (
-              <article key={product.id} className="rounded-3xl border border-white/80 bg-white/80 p-5 shadow-lg shadow-slate-200/50">
+              <article key={product.id} className="rounded-3xl border border-red-200 bg-gradient-to-br from-red-700 via-red-600 to-red-500 p-5 shadow-lg shadow-red-950/10">
                 <div className="flex items-start justify-between">
-                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-sky-100 text-sky-700"><Package /></span>
+                  <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white/20 text-white"><Package /></span>
                   <span className={`rounded-full px-3 py-1 text-xs font-bold ${tone}`}>{label}</span>
                 </div>
-                <h2 className="mt-4 text-lg font-bold">{product.name}</h2>
-                <p className="text-sm text-slate-500">{product.category?.name || 'Uncategorized'} · SKU {product.sku}</p>
-                {product.barcode && <p className="text-xs text-slate-400">Barcode: {product.barcode}</p>}
+                <h2 className="mt-4 text-lg font-bold text-white drop-shadow-sm">{product.name}</h2>
+                <p className="text-sm text-white/70">{product.category?.name || 'Uncategorized'} &middot; SKU {product.sku}</p>
+                {product.barcode && <p className="text-xs text-white/60">Barcode: {product.barcode}</p>}
                 <div className="mt-5 flex items-end justify-between">
                   <div>
-                    <p className="text-xs text-slate-500">Selling price</p>
-                    <p className="text-lg font-bold text-sky-800">{product.sellingPrice > 0 ? `GH₵ ${product.sellingPrice.toFixed(2)}` : '—'}</p>
-                    <p className="text-xs text-slate-500">Stock <strong>{product.stockQuantity}</strong> · Min {product.minimumStock || 0}</p>
+                    <p className="text-xs text-white/70">Selling price</p>
+                    <p className="text-lg font-bold text-white drop-shadow-sm">{product.sellingPrice > 0 ? `GH₵ ${product.sellingPrice.toFixed(2)}` : '—'}</p>
+                    <p className="text-xs text-white/70">Stock <strong>{product.stockQuantity}</strong> &middot; Min {product.minimumStock || 0}</p>
                   </div>
-                  <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => navigate(`/products/${product.id}/edit`)}>
+                  <Button size="sm" variant="secondary" className="rounded-xl bg-white/20 text-white hover:bg-white/30" onClick={() => navigate(`/products/${product.id}/edit`)}>
                     <Pencil size={14} className="mr-1" /> Edit
                   </Button>
                 </div>

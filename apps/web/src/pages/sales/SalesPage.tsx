@@ -312,10 +312,10 @@ const sendSmsReceipt = async (saleId: string, phone: string) => {
           <div className="grid h-[18.5rem] max-h-[18.5rem] grid-cols-2 auto-rows-[8.5rem] gap-3 overflow-y-auto rounded-3xl border-2 border-brand-200 bg-red-50/50 p-3 pr-2 shadow-xl shadow-red-950/10">
             {productsLoading && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Loading products...</div>}
             {!productsLoading && products.map((product) => (
-              <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="onyx-layered-card group rounded-2xl border border-red-100 bg-white p-3 text-left shadow-lg shadow-red-950/10 transition hover:-translate-y-1 hover:border-brand-500 hover:shadow-glow-red disabled:cursor-not-allowed disabled:opacity-50">
-                <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-red-100 text-brand-700"><ShoppingCart size={20} /></span>
-                <span className="block truncate font-bold text-slate-800">{product.name}</span>
-                <span className="mt-1 block text-sm text-slate-500">{money(product.sellingPrice)} · {product.stockQuantity} in stock</span>
+              <button type="button" key={product.id} onClick={() => addToCart(product)} disabled={product.stockQuantity <= 0} className="group rounded-2xl border border-red-200 bg-gradient-to-br from-red-700 via-red-600 to-red-500 p-3 text-left shadow-lg shadow-red-950/20 transition hover:-translate-y-1 hover:border-red-100 hover:shadow-glow-red disabled:cursor-not-allowed disabled:opacity-50">
+                <span className="mb-2 flex h-10 w-10 items-center justify-center rounded-2xl bg-white/20 text-white"><ShoppingCart size={20} /></span>
+                <span className="block truncate font-bold text-white drop-shadow-sm">{product.name}</span>
+                <span className="mt-1 block text-sm text-white/80">{money(product.sellingPrice)} · {product.stockQuantity} in stock</span>
               </button>
             ))}
             {!productsLoading && !products.length && <div className="col-span-full rounded-3xl bg-white/70 p-10 text-center text-slate-500">Search for a product to begin.</div>}
