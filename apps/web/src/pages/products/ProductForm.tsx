@@ -23,7 +23,10 @@ const productSchema = z.object({
   sellingPrice: z.number().min(0, 'Must be 0 or more'),
   stockQuantity: z.number().int().min(0, 'Must be 0 or more'),
   minimumStock: z.number().int().min(0, 'Must be 0 or more').default(0),
-  taxRate: z.number().min(0).max(1).optional().nullable(),
+  taxRate: z.preprocess(
+    (value) => value === '' || (typeof value === 'number' && Number.isNaN(value)) ? null : value,
+    z.number().min(0).max(1).nullable().optional(),
+  ),
   status: z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'OUT_OF_STOCK']).default('ACTIVE'),
 });
 
