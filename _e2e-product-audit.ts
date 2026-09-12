@@ -1,3 +1,5 @@
+/// <reference types="node" />
+
 const BASE = 'http://localhost:3001/api';
 const results: Array<{ step: string; ok: boolean; detail: string }> = [];
 const step = (s: string, ok: boolean, detail: string) => results.push({ step: s, ok, detail });
