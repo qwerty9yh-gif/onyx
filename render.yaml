@@ -19,9 +19,9 @@ services:
       - key: JWT_EXPIRES_IN
         value: 7d
       - key: FRONTEND_URL
-        value: https://qwerty9yh-gif.github.io/onyx/
+        value: https://onyxos.space/
       - key: CORS_ORIGINS
-        value: https://qwerty9yh-gif.github.io,http://localhost:5173
+        value: https://onyxos.space,http://localhost:5173
       - key: REDIS_URL
         sync: false
       - key: PRINTER_API_URL
