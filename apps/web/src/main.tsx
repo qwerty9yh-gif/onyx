@@ -2,12 +2,42 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { registerSW } from 'virtual:pwa-register';
 import App from './App';
 import { initAuth, clearToken } from './lib/auth';
 import { initBarcodeScanner } from './lib/scanner';
 import './index.css';
 
 const APP_NAME = 'ONYX POS';
+
+// ── PWA service-worker auto-update ──────────────────────────────────────────
+// Precached bundles previously kept stale UI on screen until the user
+// reloaded manually (often twice). Register via the vite-plugin-pwa module,
+// check for new builds periodically, and reload automatically when an
+// updated service worker takes control of the page.
+if ('serviceWorker' in navigator) {
+  let hadController = Boolean(navigator.serviceWorker.controller);
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    // Only reload when an update replaces an existing controller (skip the
+    // very first install), and only once per page load.
+    if (hadController && !refreshing) {
+      refreshing = true;
+      window.location.reload();
+    }
+    hadController = true;
+  });
+  registerSW({
+    immediate: true,
+    onRegisteredSW(_swUrl, registration) {
+      if (registration) {
+        // Poll for new builds every 60s so updates appear promptly.
+        window.setInterval(() => { void registration.update(); }, 60_000);
+      }
+    },
+  });
+}
+
 
 initAuth();
 initBarcodeScanner();
