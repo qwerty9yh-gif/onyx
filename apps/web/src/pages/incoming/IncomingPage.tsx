@@ -404,18 +404,18 @@ export const IncomingPage: React.FC = () => {
             </div>
             <div className="mt-4 max-h-[38vh] space-y-3 overflow-y-auto pr-1">
               {cart.map((item) => (
-                <div key={item.productId} className="rounded-2xl bg-sky-50/80 p-3">
+                <div key={item.productId} className="rounded-2xl onyx-brand-gradient p-3 shadow-md shadow-red-950/20">
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate font-semibold text-slate-800">{item.name}</p>
-                      <p className="text-xs text-slate-500">Stock {item.stockBefore} to <strong className="text-emerald-700">{item.stockBefore + item.quantity}</strong></p>
+                      <p className="truncate font-semibold text-white drop-shadow-sm">{item.name}</p>
+                      <p className="text-xs text-white/80">Stock {item.stockBefore} to <strong className="text-white">{item.stockBefore + item.quantity}</strong></p>
                     </div>
-                    <button type="button" onClick={() => setCart((current) => current.filter((line) => line.productId !== item.productId))} className="rounded-xl p-1.5 text-slate-400 hover:bg-red-100 hover:text-red-600" title="Remove"><Trash2 size={15} /></button>
+                    <button type="button" onClick={() => setCart((current) => current.filter((line) => line.productId !== item.productId))} className="rounded-xl p-1.5 text-white/80 hover:bg-white/20 hover:text-white" title="Remove"><Trash2 size={15} /></button>
                   </div>
                   <div className="mt-2 flex items-center gap-2">
-                    <button type="button" onClick={() => changeQty(item.productId, -1)} className="rounded-xl bg-white p-2 text-brand-700 shadow-sm"><Minus size={15} /></button>
-                    <input type="number" min="1" value={item.quantity} onChange={(event) => setQty(item.productId, event.target.value)} className="h-9 w-16 rounded-xl border border-slate-200 text-center text-sm font-bold outline-none focus:border-brand-400" />
-                    <button type="button" onClick={() => changeQty(item.productId, 1)} className="rounded-xl bg-white p-2 text-brand-700 shadow-sm"><Plus size={15} /></button>
+                    <button type="button" onClick={() => changeQty(item.productId, -1)} className="rounded-xl bg-white/20 p-2 text-white transition hover:bg-white/30"><Minus size={15} /></button>
+                    <input type="number" min="1" value={item.quantity} onChange={(event) => setQty(item.productId, event.target.value)} className="h-9 w-16 rounded-xl border border-white/40 bg-white/10 text-center text-sm font-bold text-white outline-none focus:border-white/70" />
+                    <button type="button" onClick={() => changeQty(item.productId, 1)} className="rounded-xl bg-white/20 p-2 text-white transition hover:bg-white/30"><Plus size={15} /></button>
                   </div>
                 </div>
               ))}
