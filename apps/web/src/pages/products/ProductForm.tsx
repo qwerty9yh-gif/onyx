@@ -11,26 +11,58 @@ import { Product, Category, Supplier } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 
+const emptyToNull = (value: unknown) =>
+  typeof value === 'string' && value.trim() === '' ? null : value;
+
+const numberField = (fallback: number, integer = false) => {
+  const base = z.number({ invalid_type_error: 'Must be a valid number' }).min(0, 'Must be 0 or more');
+  return z.preprocess((value) => {
+    if (value === '' || value === null || value === undefined) return fallback;
+    if (typeof value === 'number') return Number.isNaN(value) ? fallback : value;
+    if (typeof value === 'string') {
+      const trimmed = value.trim();
+      return trimmed === '' ? fallback : Number(trimmed);
+    }
+    return value;
+  }, integer ? base.int('Must be a whole number') : base);
+};
+
+// Mirrors the API schema (apps/api/src/routes/products.ts) so a product the form
+// considers valid is never rejected by the backend with "Validation failed".
 const productSchema = z.object({
-  name: z.string().min(1, 'Name is required'),
-  sku: z.string().min(1, 'SKU is required'),
-  barcode: z.string().optional(),
-  description: z.string().optional(),
-  image: z.string().optional(),
-  categoryId: z.string().optional().nullable(),
-  supplierId: z.string().optional().nullable(),
-  costPrice: z.number().min(0, 'Must be 0 or more'),
-  sellingPrice: z.number().min(0, 'Must be 0 or more'),
-  stockQuantity: z.number().int().min(0, 'Must be 0 or more'),
-  minimumStock: z.number().int().min(0, 'Must be 0 or more').default(0),
+  name: z.string().trim().min(1, 'Name is required'),
+  sku: z.string().trim().min(1, 'SKU is required'),
+  barcode: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  description: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  image: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  categoryId: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  supplierId: z.preprocess(emptyToNull, z.string().nullable().optional()),
+  costPrice: numberField(0),
+  sellingPrice: numberField(0),
+  stockQuantity: numberField(0, true),
+  minimumStock: numberField(0, true),
   taxRate: z.preprocess(
-    (value) => value === '' || (typeof value === 'number' && Number.isNaN(value)) ? null : value,
-    z.number().min(0).max(1).nullable().optional(),
+    (value) => {
+      if (value === '' || value === null || value === undefined) return null;
+      if (typeof value === 'number') return Number.isNaN(value) ? null : value;
+      if (typeof value === 'string') {
+        const trimmed = value.trim();
+        return trimmed === '' ? null : Number(trimmed);
+      }
+      return value;
+    },
+    z.number({ invalid_type_error: 'Must be a valid number' }).min(0, 'Must be 0 or more').max(100, 'Must be 100 or less').nullable(),
   ),
-  status: z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'OUT_OF_STOCK']).default('ACTIVE'),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'DISCONTINUED', 'OUT_OF_STOCK']),
 });
 
 type ProductFormData = z.infer<typeof productSchema>;
+
+const EMPTY_PRODUCT: ProductFormData = {
+  name: '', sku: '', barcode: null, description: null, image: null,
+  categoryId: null, supplierId: null, costPrice: 0, sellingPrice: 0,
+  stockQuantity: 0, minimumStock: 0, taxRate: null, status: 'ACTIVE',
+};
 
 export const ProductForm: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -60,27 +92,46 @@ export const ProductForm: React.FC = () => {
     formState: { errors },
     reset,
     setValue,
+    watch,
   } = useForm<ProductFormData>({
     resolver: zodResolver(productSchema),
+    defaultValues: EMPTY_PRODUCT,
   });
 
   useEffect(() => {
     if (product) {
       reset({
-        name: product.name, sku: product.sku, barcode: product.barcode || '',
-        description: product.description || '', image: product.image || '',
+        name: product.name, sku: product.sku, barcode: product.barcode || null,
+        description: product.description || null, image: product.image || null,
         categoryId: product.categoryId || null, supplierId: product.supplierId || null,
-        costPrice: product.costPrice, sellingPrice: product.sellingPrice,
-        stockQuantity: product.stockQuantity, minimumStock: product.minimumStock || 0,
-        taxRate: product.taxRate || null, status: product.status || 'ACTIVE',
+        costPrice: product.costPrice ?? 0, sellingPrice: product.sellingPrice ?? 0,
+        stockQuantity: product.stockQuantity ?? 0, minimumStock: product.minimumStock ?? 0,
+        taxRate: product.taxRate ?? null, status: product.status || 'ACTIVE',
       });
     }
   }, [product, reset]);
 
   const mutation = useMutation({
     mutationFn: (data: ProductFormData) => {
-      if (isEdit) return api.put(`/products/${id}`, data);
-      return api.post('/products', data);
+      // Send exactly the shape the API/Prisma schema expects: trimmed strings,
+      // empty optional values as null, and real numbers for every numeric field.
+      const payload = {
+        name: data.name.trim(),
+        sku: data.sku.trim(),
+        barcode: data.barcode?.trim() ? data.barcode.trim() : null,
+        description: data.description?.trim() ? data.description : null,
+        image: data.image?.trim() ? data.image : null,
+        categoryId: data.categoryId || null,
+        supplierId: data.supplierId || null,
+        costPrice: data.costPrice,
+        sellingPrice: data.sellingPrice,
+        stockQuantity: data.stockQuantity,
+        minimumStock: data.minimumStock,
+        taxRate: data.taxRate ?? null,
+        status: data.status,
+      };
+      if (isEdit) return api.put(`/products/${id}`, payload);
+      return api.post('/products', payload);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['products'] });
@@ -129,7 +180,10 @@ export const ProductForm: React.FC = () => {
     if (scanTimerRef.current) window.clearTimeout(scanTimerRef.current);
   }, []);
 
-    const onSubmit = (data: ProductFormData) => {
+  const selectedCategoryId = watch('categoryId') ?? '';
+  const selectedSupplierId = watch('supplierId') ?? '';
+
+  const onSubmit = (data: ProductFormData) => {
     mutation.mutate(data);
   };
 
@@ -173,14 +227,14 @@ export const ProductForm: React.FC = () => {
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
-            <select {...register('categoryId')} onChange={(e) => setValue('categoryId', e.target.value || null)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-red-500">
+            <select value={selectedCategoryId} onChange={(e) => setValue('categoryId', e.target.value || null, { shouldDirty: true, shouldValidate: true })} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-red-500">
               <option value="">Select Category</option>
               {categories?.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
             </select>
           </div>
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Supplier</label>
-            <select {...register('supplierId')} onChange={(e) => setValue('supplierId', e.target.value || null)} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-red-500">
+            <select value={selectedSupplierId} onChange={(e) => setValue('supplierId', e.target.value || null, { shouldDirty: true, shouldValidate: true })} className="w-full px-3 py-2 border rounded-md focus:ring-2 focus:ring-red-500">
               <option value="">Select Supplier</option>
               {suppliers?.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
             </select>

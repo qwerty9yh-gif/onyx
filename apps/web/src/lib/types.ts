@@ -124,6 +124,8 @@ export interface Sale {
   cashierId: string;
   customerId?: string;
   customerPhone?: string | null;
+  /** Short physical-customer identifier, e.g. "Table 5". */
+  customerNote?: string | null;
   waiterId?: string;
   waiter?: { id: string; firstName: string; lastName: string } | null;
   status: TransactionStatus;
@@ -133,6 +135,10 @@ export interface Sale {
   discountType: string;
   tax: number;
   total: number;
+  /** Sum of every payment recorded against the transaction. */
+  amountPaid?: number;
+  /** total - amountPaid, never negative. */
+  remaining?: number;
   paymentMethod: PaymentMethod;
   amountReceived: number;
   change: number;

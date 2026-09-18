@@ -44,9 +44,23 @@ export interface ApiResponse<T = unknown> {
 
 export function handleApiError(error: unknown): string {
   if (typeof error === 'object' && error !== null && 'response' in error) {
-    const err = error as { response?: { data?: { error?: string; message?: string } } };
-    return err.response?.data?.error || err.response?.data?.message || 'An unexpected error occurred';
+    const err = error as {
+      response?: {
+        data?: { error?: string; message?: string; details?: string[] | string };
+      };
+    };
+    const data = err.response?.data;
+    const base = data?.error || data?.message;
+    // Surface field-level validation details so genuinely invalid values are
+    // explained instead of showing a bare "Validation failed".
+    const details = Array.isArray(data?.details)
+      ? data!.details!.join(', ')
+      : typeof data?.details === 'string'
+        ? data.details
+        : '';
+    if (base) return details ? `${base}: ${details}` : base;
   }
+  if (error instanceof Error && error.message) return error.message;
   return 'An unexpected error occurred';
 }
 
@@ -70,4 +84,63 @@ export async function broadcastCustomerSms(title: string, message: string): Prom
 export async function messageCustomer(customerId: string, title: string, message: string): Promise<SmsSendResult> {
   const res = await api.post(`/customers/${customerId}/message`, { title, message });
   return res.data.data as SmsSendResult;
+}
+
+/**
+ * Fetch the staff members that can appear in the transaction waiter filter.
+ * Full-access roles see every waiter; normal workers only see themselves so
+ * they can never pick another worker's open order.
+ */
+export async function getWaitersForTransaction(staffId?: string): Promise<
+  Array<{ id: string; firstName: string; lastName: string; role?: string }>
+> {
+  const res = await api.get('/sales/waiters', { params: { staffId: staffId || undefined } });
+  return res.data.data as Array<{ id: string; firstName: string; lastName: string; role?: string }>;
+}
+
+/**
+ * Fetch the OPEN (unpaid) transactions for a specific waiter. Used by the
+ * Sales "Order" picker so the cashier can continue an existing unpaid order.
+ */
+export async function getOpenTransactionsForWaiter(staffId?: string): Promise<
+  Array<{
+    id: string;
+    receiptNumber: string;
+    status: string;
+    total: number;
+    amountPaid?: number | null;
+    remaining?: number | null;
+    customerNote?: string | null;
+    waiterId?: string | null;
+    cashierId?: string | null;
+    createdAt: string;
+  }>
+> {
+  const res = await api.get('/sales/open-orders', { params: { staffId: staffId || undefined } });
+  return res.data.data as Array<{
+    id: string;
+    receiptNumber: string;
+    status: string;
+    total: number;
+    amountPaid?: number | null;
+    remaining?: number | null;
+    customerNote?: string | null;
+    waiterId?: string | null;
+    cashierId?: string | null;
+    createdAt: string;
+  }>;
+}
+
+/**
+ * Append new cart items to an existing OPEN (unpaid) transaction.
+ * The existing transaction/invoice ID is reused — no new transaction or
+ * invoice is created, and previously ordered products are never removed.
+ */
+export async function appendToSale(
+  saleId: string,
+  items: Array<{ productId: string; quantity: number; discount?: number; discountType?: string }>,
+  customerNote?: string,
+): Promise<{ id: string; receiptNumber: string; status: string; total: number; amountPaid?: number | null; remaining?: number | null }> {
+  const res = await api.post(`/sales/${saleId}/items`, { items, customerNote: customerNote || undefined });
+  return res.data.data as { id: string; receiptNumber: string; status: string; total: number; amountPaid?: number | null; remaining?: number | null };
 }

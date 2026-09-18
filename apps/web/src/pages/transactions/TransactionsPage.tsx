@@ -1,15 +1,25 @@
 import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Phone, Printer, Receipt, Search, Send, UserRound, WalletCards, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Phone, Plus, Printer, Receipt, Search, Send, UserRound, WalletCards, X } from 'lucide-react';
 import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
 import { triggerDashboardRefresh } from '../../lib/offline';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { printInvoice, type InvoiceData } from '../../lib/printer';
 import type { Sale } from '../../lib/types';
-import { money } from '../../lib/helpers';
+import { money, paymentSummary } from '../../lib/helpers';
 
 type Tab = 'paid' | 'unpaid' | 'closed';
+
+interface StaffMember {
+  id: string;
+  firstName: string;
+  lastName: string;
+  role?: string;
+}
+
+const FULL_ACCESS_ROLES = ['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF'];
 
 const isPaid = (sale: Sale) => sale.status === 'COMPLETED';
 const isUnpaid = (sale: Sale) => sale.status === 'PENDING';
@@ -26,16 +36,21 @@ function statusBadge(sale: Sale) {
 }
 
 function invoiceFor(sale: Sale): InvoiceData {
+  const summary = paymentSummary(sale);
   return {
     storeName: 'ONYX LOUNGE / PUB',
     invoiceNumber: sale.receiptNumber,
     cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
     createdAt: new Date(sale.createdAt).toLocaleString(),
+    waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
+    customerNote: sale.customerNote || undefined,
     lines: (sale.items || []).map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
     subtotal: sale.subtotal,
     discount: sale.discount,
     tax: sale.tax,
     total: sale.total,
+    amountPaid: summary.amountPaid,
+    remaining: summary.remaining,
     status: isPaid(sale) ? 'PAID' : 'UNPAID',
   };
 }
@@ -43,39 +58,75 @@ function invoiceFor(sale: Sale): InvoiceData {
 export const TransactionsPage: React.FC = () => {
   const [search, setSearch] = useState('');
   const [tab, setTab] = useState<Tab>('paid');
+  const [staffId, setStaffId] = useState(''); // '' = everyone (full-access roles only)
   const [selected, setSelected] = useState<Sale | null>(null);
   const [paymentMethod, setPaymentMethod] = useState('CASH');
+  const [paymentAmount, setPaymentAmount] = useState('');
   const [error, setError] = useState('');
   const [smsPhone, setSmsPhone] = useState('');
   const [smsBusy, setSmsBusy] = useState(false);
   const [smsMsg, setSmsMsg] = useState('');
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
+
+  const { data: staff = [] } = useQuery<StaffMember[]>({
+    queryKey: ['transaction-staff'],
+    queryFn: () => api.get('/sales/waiters').then((res) => res.data.data),
+    retry: false,
+  });
+
+  // Running user (drives which waiter chips are shown).
+  const { data: me } = useQuery<{ id: string; role: string }>({
+    queryKey: ['me'],
+    queryFn: () => api.get('/auth/me').then((res) => res.data.data),
+    retry: false,
+    staleTime: 1000 * 60 * 5,
+  });
+  const canSeeEveryone = !me || FULL_ACCESS_ROLES.includes(me.role);
+
+  const activeStaffId = canSeeEveryone ? staffId : (me?.id || '');
   const { data: sales = [], isLoading, isError } = useQuery<Sale[]>({
-    queryKey: ['transactions'],
-    queryFn: () => api.get('/sales', { params: { limit: 100 } }).then((res) => res.data.data),
+    queryKey: ['transactions', activeStaffId, tab, search],
+    queryFn: () => api.get('/sales', {
+      params: {
+        limit: 100,
+        status: tab === 'paid' ? 'COMPLETED' : tab === 'unpaid' ? 'PENDING' : 'VOIDED,REFUNDED',
+        staffId: activeStaffId || undefined,
+        search: search || undefined,
+      },
+    }).then((res) => res.data.data),
   });
   const payMutation = useMutation({
-    mutationFn: (sale: Sale) => api.post(`/sales/${sale.id}/mark-paid`, { paymentMethod, amountReceived: sale.total }),
-    onSuccess: () => {
+    mutationFn: (args: { sale: Sale; amount: number }) => api.post(`/sales/${args.sale.id}/payment`, {
+      paymentMethod,
+      amount: args.amount,
+    }),
+    onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['open-orders'] });
       queryClient.invalidateQueries({ queryKey: ['products-search'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       triggerDashboardRefresh();
-      setSelected(null);
+      setSelected(res.data.data as Sale);
+      setPaymentAmount('');
       setError('');
     },
     onError: (err) => setError(handleApiError(err)),
   });
 
-const filtered = useMemo(() => sales
-    .filter((sale) => !search || sale.receiptNumber.toLowerCase().includes(search.toLowerCase()) || sale.customer?.name?.toLowerCase().includes(search.toLowerCase()))
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [sales, search]);
-  const paid = filtered.filter(isPaid);
-  const unpaid = filtered.filter(isUnpaid);
-  const closed = filtered.filter(isClosed);
-  const open = (sale: Sale) => { setSelected(sale); setSmsPhone(sale.customerPhone || sale.customer?.phone || ''); setSmsMsg(''); setError(''); };
+const list = useMemo(() => sales
+    .slice()
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()), [sales]);
+  const paid = list.filter(isPaid);
+  const unpaid = list.filter(isUnpaid);
+  const closed = list.filter(isClosed);
+  // For normal workers the server already scoped the list, so chips show only them.
+  const chips: StaffMember[] = canSeeEveryone ? staff : staff.filter((member) => member.id === activeStaffId);
+  const staffLabel = (member: StaffMember) => `${member.firstName} ${member.lastName}`.trim() || 'Staff';
+  const open = (sale: Sale) => { setSelected(sale); setPaymentAmount(''); setSmsPhone(sale.customerPhone || sale.customer?.phone || ''); setSmsMsg(''); setError(''); };
   const print = (sale: Sale) => { printInvoice(invoiceFor(sale)); setSelected(null); };
+  const continueOrder = (sale: Sale) => { setSelected(null); navigate(`/sales?saleId=${sale.id}`); };
 
   const sendSms = async () => {
     if (!selected) return;
@@ -109,8 +160,14 @@ const filtered = useMemo(() => sales
             <span>{sale.items?.reduce((count, item) => count + item.quantity, 0) || 0} items · {sale.paymentMethod}</span>
             {sale.waiter && <span className="inline-flex items-center gap-1"><UserRound size={13} />Waiter: {sale.waiter.firstName} {sale.waiter.lastName}</span>}
             {(sale.customerPhone || sale.customer?.phone) && <span className="inline-flex items-center gap-1"><Phone size={13} />{sale.customerPhone || sale.customer?.phone}</span>}
+            {sale.customerNote && <span className="inline-flex items-center gap-1 font-semibold text-brand-700">Note: {sale.customerNote}</span>}
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-2">{statusBadge(sale)}{sale.customer?.name && <span className="text-xs text-slate-500">{sale.customer.name}</span>}</div>
+          <div className="mt-3 flex flex-wrap items-center gap-2">{statusBadge(sale)}{sale.customer?.name && <span className="text-xs text-slate-500">{sale.customer.name}</span>}{isUnpaid(sale) && <Badge variant="info">Owing {money(paymentSummary(sale).remaining)}</Badge>}</div>
+          {isUnpaid(sale) && (
+            <div className="mt-3">
+              <Button size="sm" variant="secondary" className="rounded-xl" onClick={(event) => { event.stopPropagation(); continueOrder(sale); }}><Plus size={14} className="mr-1" />Add product / Continue order</Button>
+            </div>
+          )}
         </button>
       )) : <div className="rounded-3xl border border-dashed border-slate-300 p-8 text-center text-slate-500">No {title.toLowerCase()} yet.</div>}
     </section>
@@ -124,6 +181,18 @@ return <div className="mx-auto max-w-6xl space-y-6">
       </div>
       <div className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-semibold text-slate-600 shadow-glass-sm"><Receipt size={16} className="text-brand-700" />{paid.length} paid · {unpaid.length} unpaid</div>
     </header>
+    {/* Level 1: waiter navigation (dynamic, never hard-coded). */}
+    <div className="flex flex-wrap gap-2" role="tablist" aria-label="Waiter">
+      {canSeeEveryone && (
+        <button type="button" role="tab" aria-selected={!activeStaffId} onClick={() => setStaffId('')}
+          className={`rounded-full px-4 py-2 text-sm font-bold transition ${!activeStaffId ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>All</button>
+      )}
+      {chips.map((member) => (
+        <button key={member.id} type="button" role="tab" aria-selected={activeStaffId === member.id}
+          onClick={() => setStaffId(activeStaffId === member.id && canSeeEveryone ? '' : member.id)}
+          className={`rounded-full px-4 py-2 text-sm font-bold transition ${activeStaffId === member.id ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>{staffLabel(member)}</button>
+      ))}
+    </div>
     <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-white/85 p-4 shadow-lg shadow-red-950/10 sm:flex-row">
       <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700" size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search receipt or customer" className="h-12 w-full rounded-2xl bg-red-50 pl-10 pr-4 outline-none focus:ring-2 focus:ring-red-300" /></div>
       <div className="flex rounded-2xl bg-red-50 p-1" role="tablist" aria-label="Transaction status">
@@ -149,12 +218,30 @@ return <div className="mx-auto max-w-6xl space-y-6">
           <div className="space-y-4 p-5">
             {statusBadge(selected)}
             <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Date</span><p className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleString()}</p></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Payment</span><p className="font-semibold text-slate-800">{selected.paymentMethod}</p></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Cashier</span><p className="font-semibold text-slate-800">{selected.cashier ? `${selected.cashier.firstName} ${selected.cashier.lastName}` : '—'}</p></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Waiter</span><p className="font-semibold text-slate-800">{selected.waiter ? `${selected.waiter.firstName} ${selected.waiter.lastName}` : '—'}</p></div>
-              {selected.customer?.name && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Customer</span><p className="font-semibold text-slate-800">{selected.customer.name}</p></div>}
-              {(selected.customerPhone || selected.customer?.phone) && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Phone</span><p className="font-semibold text-slate-800">{selected.customerPhone || selected.customer?.phone}</p></div>}
+              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Waiter: <span className="font-semibold text-slate-800">{selected.waiter ? `${selected.waiter.firstName} ${selected.waiter.lastName}` : '—'}</span></div>
+              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Invoice: <span className="font-semibold text-slate-800">{selected.receiptNumber}</span></div>
+              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Ordered by: <span className="font-semibold text-slate-800">{selected.cashier ? `${selected.cashier.firstName} ${selected.cashier.lastName}` : '—'}</span></div>
+              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Date: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleString()}</span></div>
+              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Payment: <span className="font-semibold text-slate-800">{selected.paymentMethod}</span></div>
+              {selected.customerNote && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Note: <span className="font-semibold text-slate-800">{selected.customerNote}</span></div>}
+              {selected.customer?.name && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Customer: <span className="font-semibold text-slate-800">{selected.customer.name}</span></div>}
+              {(selected.customerPhone || selected.customer?.phone) && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Phone: <span className="font-semibold text-slate-800">{selected.customerPhone || selected.customer?.phone}</span></div>}
+            </div>
+            <div className="overflow-hidden rounded-2xl border border-red-100">
+              <div className="max-h-44 space-y-1 overflow-y-auto p-3">
+                {(selected.items || []).map((item) => (
+                  <div key={item.id} className="flex items-center justify-between gap-3 text-sm">
+                    <span className="font-semibold text-slate-800">{item.quantity} × {item.name}</span>
+                    <span className="font-bold text-slate-900">{money(item.total)}</span>
+                  </div>
+                ))}
+                {!(selected.items || []).length && <p className="text-sm text-slate-500">No products on this transaction.</p>}
+              </div>
+              <div className="space-y-1 border-t border-red-100 bg-red-50/40 px-3 py-3 text-sm">
+                <div className="flex justify-between text-slate-600"><span>Total</span><span className="font-bold text-slate-900">{money(paymentSummary(selected).total)}</span></div>
+                <div className="flex justify-between text-slate-600"><span>Amount paid</span><span>{money(paymentSummary(selected).amountPaid)}</span></div>
+                <div className="flex justify-between font-bold"><span>Remaining</span><span className={paymentSummary(selected).remaining > 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(paymentSummary(selected).remaining)}</span></div>
+              </div>
             </div>
             {isPaid(selected) && (
               <div className="space-y-3 rounded-2xl border border-brand-200 bg-red-50/50 p-3">
@@ -165,15 +252,32 @@ return <div className="mx-auto max-w-6xl space-y-6">
               </div>
             )}
             {!isPaid(selected) && !isClosed(selected) && (
-              <>
+              <div className="space-y-3 rounded-2xl border border-red-100 bg-red-50/50 p-3">
+                <div className="grid grid-cols-2 gap-2 text-sm">
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="block text-xs text-slate-500">Total</span><strong>{money(paymentSummary(selected).total)}</strong></div>
+                  <div className="rounded-xl bg-white px-3 py-2"><span className="block text-xs text-slate-500">Already paid</span><strong>{money(paymentSummary(selected).amountPaid)}</strong></div>
+                </div>
+                <label className="block text-sm font-semibold text-slate-700">Amount to pay now
+                  <input type="number" min="0" step="0.01" value={paymentAmount} onChange={(event) => setPaymentAmount(event.target.value)}
+                    placeholder={paymentSummary(selected).remaining.toFixed(2)} className="mt-2 h-12 w-full rounded-2xl border border-red-100 bg-white px-3 outline-none focus:ring-2 focus:ring-red-300" />
+                </label>
+                <p className="text-xs text-slate-500">Leaving it blank pays the full remaining {money(paymentSummary(selected).remaining)}. Payments add up — earlier payments are never reset.</p>
                 <label className="block text-sm font-semibold text-slate-700">Payment method
-                  <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-red-100 bg-red-50/60 px-3 outline-none focus:ring-2 focus:ring-red-300"><option>CASH</option><option>CARD</option><option>TRANSFER</option><option>QR</option></select>
+                  <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-red-100 bg-white px-3 outline-none focus:ring-2 focus:ring-red-300"><option>CASH</option><option>CARD</option><option>TRANSFER</option><option>QR</option></select>
                 </label>
                 {error && <p className="text-sm text-red-600">{error}</p>}
-              </>
+              </div>
             )}
             <div className="grid gap-3 sm:grid-cols-2">
-              {!isPaid(selected) && !isClosed(selected) && <Button className="rounded-2xl bg-emerald-600 hover:bg-emerald-700" loading={payMutation.isPending} onClick={() => payMutation.mutate(selected)}><WalletCards className="mr-2" size={18} />Pay order</Button>}
+              {!isPaid(selected) && !isClosed(selected) && (
+                <>
+                  <Button className="rounded-2xl bg-emerald-600 hover:bg-emerald-700" loading={payMutation.isPending}
+                    onClick={() => payMutation.mutate({ sale: selected, amount: paymentAmount === '' ? paymentSummary(selected).remaining : Number(paymentAmount) })}>
+                    <WalletCards className="mr-2" size={18} />Pay order
+                  </Button>
+                  <Button variant="outline" className="rounded-2xl" onClick={() => continueOrder(selected)}><Plus className="mr-2" size={18} />Add product</Button>
+                </>
+              )}
               <Button variant="outline" className="rounded-2xl" onClick={() => print(selected)}><Printer className="mr-2" size={18} />Print invoice</Button>
             </div>
           </div>

@@ -280,6 +280,8 @@ model Sale {
   waiterId       String?
   waiter         User?             @relation("WaiterSales", fields: [waiterId], references: [id])
   customerPhone  String?
+  // Short physical-customer identifier used by waiters, e.g. "Table 5", "Tall man".
+  customerNote   String?
   status         TransactionStatus @default(PENDING)
   syncStatus     SyncStatus        @default(PENDING)
   subtotal       Float             @default(0)

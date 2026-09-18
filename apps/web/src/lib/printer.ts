@@ -19,11 +19,16 @@ export interface ReceiptData {
   cashier: string;
   createdAt: string;
   customer?: string;
+  /** Short physical-customer identifier, e.g. "Table 5". */
+  customerNote?: string;
+  waiter?: string;
   lines: ReceiptLine[];
   subtotal: number;
   discount: number;
   tax: number;
   total: number;
+  amountPaid?: number;
+  remaining?: number;
   paymentMethod: PaymentMethod;
   amountReceived: number;
   change: number;
@@ -42,11 +47,16 @@ export interface InvoiceData {
   cashier: string;
   createdAt: string;
   customer?: string;
+  /** Short physical-customer identifier, e.g. "Table 5". */
+  customerNote?: string;
+  waiter?: string;
   lines: InvoiceLine[];
   subtotal: number;
   discount: number;
   tax: number;
   total: number;
+  amountPaid?: number;
+  remaining?: number;
   status?: string;
   dueDate?: string;
 }
@@ -155,7 +165,11 @@ export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
   chunks.push(text('------------------------------------------\n'));
   chunks.push(text(`Subtotal:                 ${formatCedi(receipt.subtotal)}\nDiscount:                 ${formatCedi(receipt.discount)}\nTax:                      ${formatCedi(receipt.tax)}\n`));
   chunks.push(text(`${ESC}a\x01TOTAL:                    ${formatCedi(receipt.total)}\n`));
-  chunks.push(text(`${ESC}a\x00Paid (${receipt.paymentMethod}):        ${formatCedi(receipt.amountReceived)}\nChange:                   ${formatCedi(receipt.change)}\n\nThank you for choosing ONYX!\n\n`));
+  chunks.push(text(`${ESC}a\x00Paid:                     ${formatCedi(receipt.amountPaid ?? receipt.amountReceived)}\n`));
+  if (typeof receipt.remaining === 'number') {
+    chunks.push(text(`Remaining:                ${formatCedi(receipt.remaining)}\n`));
+  }
+  chunks.push(text(`Change:                   ${formatCedi(receipt.change)}\n\nThank you for choosing ONYX!\n\n`));
   chunks.push(buildQrRaster(qr, 4, 2));
   chunks.push(text(`\n${ESC}a\x01${receipt.storeName}\n`));
   chunks.push(text(`${ESC}a\x00`));
@@ -180,6 +194,8 @@ export function buildEscPosInvoice(invoice: InvoiceData): Uint8Array {
   chunks.push(text('------------------------------------------\n'));
   chunks.push(text(`Subtotal:                 ${formatCedi(invoice.subtotal)}\nDiscount:                 ${formatCedi(invoice.discount)}\nTax:                      ${formatCedi(invoice.tax)}\n`));
   chunks.push(text(`${ESC}a\x01TOTAL DUE:                ${formatCedi(invoice.total)}\n`));
+  chunks.push(text(`${ESC}a\x00Amount paid:              ${formatCedi(invoice.amountPaid ?? 0)}\n`));
+  chunks.push(text(`Remaining:                ${formatCedi(invoice.remaining ?? invoice.total)}\n`));
   chunks.push(text(`${ESC}a\x00This invoice can be reopened and marked as paid.\n\n`));
   chunks.push(buildQrRaster(qr, 4, 2));
   chunks.push(text(`\n${ESC}a\x01${invoice.storeName}\n`));
@@ -307,7 +323,9 @@ export function printReceipt(receipt: ReceiptData): void {
         <tr><td>Receipt</td><td><strong>${receipt.receiptNumber}</strong></td></tr>
         <tr><td>Date</td><td>${receipt.createdAt}</td></tr>
         <tr><td>Cashier</td><td>${receipt.cashier}</td></tr>
+        ${receipt.waiter ? `<tr><td>Waiter</td><td>${receipt.waiter}</td></tr>` : ''}
         ${receipt.customer ? `<tr><td>Customer</td><td>${receipt.customer}</td></tr>` : ''}
+        ${receipt.customerNote ? `<tr><td>Order note</td><td>${receipt.customerNote}</td></tr>` : ''}
         <tr><td>Payment</td><td>${receipt.paymentMethod}</td></tr>
       </table>
       <table class="items">
@@ -319,6 +337,8 @@ export function printReceipt(receipt: ReceiptData): void {
           <tr><td colspan="3" class="lbl">Discount</td><td class="r">-${formatCedi(receipt.discount)}</td></tr>
           <tr><td colspan="3" class="lbl">Tax</td><td class="r">${formatCedi(receipt.tax)}</td></tr>
           <tr class="grand"><td colspan="3">TOTAL</td><td class="r">${formatCedi(receipt.total)}</td></tr>
+          <tr><td colspan="3" class="lbl">Amount paid</td><td class="r">${formatCedi(receipt.amountPaid ?? receipt.amountReceived)}</td></tr>
+          <tr><td colspan="3" class="lbl">Remaining</td><td class="r">${formatCedi(receipt.remaining ?? 0)}</td></tr>
           <tr><td colspan="3" class="lbl">Amount received</td><td class="r">${formatCedi(receipt.amountReceived)}</td></tr>
           <tr><td colspan="3" class="lbl">Change</td><td class="r">${formatCedi(receipt.change)}</td></tr>
         </tbody>
@@ -342,7 +362,9 @@ export function printInvoice(invoice: InvoiceData): void {
         <tr><td>Invoice</td><td><strong>${invoice.invoiceNumber}</strong></td></tr>
         <tr><td>Date</td><td>${invoice.createdAt}</td></tr>
         <tr><td>Cashier</td><td>${invoice.cashier}</td></tr>
+        ${invoice.waiter ? `<tr><td>Waiter</td><td>${invoice.waiter}</td></tr>` : ''}
         ${invoice.customer ? `<tr><td>Customer</td><td>${invoice.customer}</td></tr>` : ''}
+        ${invoice.customerNote ? `<tr><td>Order note</td><td>${invoice.customerNote}</td></tr>` : ''}
         <tr><td>Status</td><td><strong>${invoice.status || 'UNPAID'}</strong></td></tr>
         ${invoice.dueDate ? `<tr><td>Due</td><td>${invoice.dueDate}</td></tr>` : ''}
       </table>
@@ -355,6 +377,8 @@ export function printInvoice(invoice: InvoiceData): void {
           <tr><td colspan="3" class="lbl">Discount</td><td class="r">-${formatCedi(invoice.discount)}</td></tr>
           <tr><td colspan="3" class="lbl">Tax</td><td class="r">${formatCedi(invoice.tax)}</td></tr>
           <tr class="grand"><td colspan="3">TOTAL DUE</td><td class="r">${formatCedi(invoice.total)}</td></tr>
+          <tr><td colspan="3" class="lbl">Amount paid</td><td class="r">${formatCedi(invoice.amountPaid ?? 0)}</td></tr>
+          <tr><td colspan="3" class="lbl">Remaining</td><td class="r">${formatCedi(invoice.remaining ?? invoice.total)}</td></tr>
         </tbody>
       </table>
       <div class="qr"><img src="${qr}" alt="QR" width="120" height="120" /></div>

@@ -6,7 +6,7 @@ import { api, sendSmsInvoice } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import type { Sale, SaleItem } from '../../lib/types';
-import { money } from '../../lib/helpers';
+import { money, paymentSummary } from '../../lib/helpers';
 import { printReceipt, type ReceiptData } from '../../lib/printer';
 
 export const ReceiptPage: React.FC = () => {
@@ -23,18 +23,23 @@ export const ReceiptPage: React.FC = () => {
   if (!sale) return <div className="p-8">Sale not found</div>;
 
   const print = () => {
+    const summary = paymentSummary(sale);
     const receipt: ReceiptData = {
       storeName: 'ONYX LOUNGE / PUB',
       receiptNumber: sale.receiptNumber,
       cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
       createdAt: new Date(sale.createdAt).toLocaleString(),
+      customerNote: sale.customerNote || undefined,
+      waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
       lines: sale.items.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
       subtotal: sale.subtotal,
       discount: sale.discount,
       tax: sale.tax,
       total: sale.total,
+      amountPaid: summary.amountPaid,
+      remaining: summary.remaining,
       paymentMethod: sale.paymentMethod,
-      amountReceived: sale.amountReceived,
+      amountReceived: sale.amountReceived ?? summary.amountPaid,
       change: sale.change,
     };
     printReceipt(receipt);
@@ -71,6 +76,7 @@ return (
           <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Cashier</span><p className="font-semibold text-slate-800">{sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS'}</p></div>
           {sale.waiter && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><UserRound size={12} /> Waiter</span><p className="font-semibold text-slate-800">{sale.waiter.firstName} {sale.waiter.lastName}</p></div>}
           <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Payment</span><p className="font-semibold text-slate-800">{sale.paymentMethod}</p></div>
+          {sale.customerNote && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Order note</span><p className="font-semibold text-slate-800">{sale.customerNote}</p></div>}
           {sale.customer?.name && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Customer</span><p className="font-semibold text-slate-800">{sale.customer.name}</p></div>}
           {(sale.customerPhone || sale.customer?.phone) && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Phone size={12} /> Phone</span><p className="font-semibold text-slate-800">{sale.customerPhone || sale.customer?.phone}</p></div>}
         </div>
@@ -94,8 +100,9 @@ return (
           <div className="flex justify-between text-slate-600"><span>Subtotal</span><span>{money(sale.subtotal)}</span></div>
           <div className="flex justify-between text-slate-600"><span>Discount</span><span>-{money(sale.discount)}</span></div>
           <div className="flex justify-between text-slate-600"><span>Tax</span><span>{money(sale.tax)}</span></div>
-          <div className="flex justify-between pt-2 text-lg font-extrabold text-slate-900"><span>Total</span><span>{money(sale.total)}</span></div>
-          <div className="flex justify-between text-slate-600"><span>Paid</span><span>{money(sale.amountReceived)}</span></div>
+          <div className="flex justify-between pt-2 text-lg font-extrabold text-slate-900"><span>Total</span><span>{money(paymentSummary(sale).total)}</span></div>
+          <div className="flex justify-between text-slate-600"><span>Amount paid</span><span>{money(paymentSummary(sale).amountPaid)}</span></div>
+          <div className={`flex justify-between font-bold ${paymentSummary(sale).remaining > 0 ? 'text-brand-700' : 'text-emerald-600'}`}><span>Remaining</span><span>{money(paymentSummary(sale).remaining)}</span></div>
           <div className="flex justify-between text-slate-600"><span>Change</span><span>{money(sale.change)}</span></div>
         </div>
       </section>

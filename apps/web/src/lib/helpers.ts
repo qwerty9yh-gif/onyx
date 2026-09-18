@@ -59,3 +59,31 @@ export function calculateChange(amountReceived: number, total: number): number {
 export function calculateSubtotal(items: Array<{ quantity: number; unitPrice: number }>): number {
   return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
 }
+
+export interface PaymentSummary {
+  total: number;
+  amountPaid: number;
+  remaining: number;
+}
+
+/**
+ * Single source of truth for TOTAL / AMOUNT PAID / REMAINING across the
+ * transaction popup, invoice, unpaid transaction and receipt screens.
+ * `remaining` is always clamped at zero so money still owed is never negative.
+ */
+export function paymentSummary(sale: {
+  total: number;
+  amountPaid?: number | null;
+  remaining?: number | null;
+  amountReceived?: number | null;
+}): PaymentSummary {
+  const total = roundToTwoDecimals(Number(sale.total) || 0);
+  const paid = typeof sale.amountPaid === 'number' && Number.isFinite(sale.amountPaid)
+    ? sale.amountPaid
+    : Number(sale.amountReceived) || 0;
+  const amountPaid = roundToTwoDecimals(paid);
+  const remaining = typeof sale.remaining === 'number' && Number.isFinite(sale.remaining)
+    ? roundToTwoDecimals(Math.max(sale.remaining, 0))
+    : roundToTwoDecimals(Math.max(total - amountPaid, 0));
+  return { total, amountPaid, remaining };
+}

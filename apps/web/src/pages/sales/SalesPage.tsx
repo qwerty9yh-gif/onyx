@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { Banknote, CheckCircle, CreditCard, FileText, Minus, Phone, Plus, Printer, Search, Send, ShoppingCart, Trash2, UserRound, Wifi, WifiOff } from 'lucide-react';
 import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
-import { money } from '../../lib/helpers';
-import type { PaymentMethod, Product, User } from '../../lib/types';
+import { money, paymentSummary } from '../../lib/helpers';
+import type { PaymentMethod, Product, Sale, User } from '../../lib/types';
 import { Button } from '../../components/ui/Button';
 import { clearCart, loadCart, loadProducts, loadQueue, markQueuedSaleFailed, queueSale, removeQueuedSale, saveCart, saveProducts } from '../../lib/offline';
 import { onBarcodeScan } from '../../lib/scanner';
@@ -25,6 +26,28 @@ interface StaffMember {
   role?: string;
 }
 
+/** An existing OPEN (unpaid) transaction that new cart items are appended to. */
+interface TargetOrder {
+  id: string;
+  receiptNumber: string;
+  total: number;
+  amountPaid: number;
+  remaining: number;
+  customerNote?: string | null;
+}
+
+const toTargetOrder = (sale: Sale): TargetOrder => {
+  const summary = paymentSummary(sale);
+  return {
+    id: sale.id,
+    receiptNumber: sale.receiptNumber,
+    total: summary.total,
+    amountPaid: summary.amountPaid,
+    remaining: summary.remaining,
+    customerNote: sale.customerNote ?? null,
+  };
+};
+
 // ── Business identity used on invoices & receipts ──────────────────────────
 export const BUSINESS = {
   name: 'ONYX LOUNGE / PUB',
@@ -33,12 +56,17 @@ export const BUSINESS = {
 };
 
 export const SalesPage: React.FC = () => {
+  const [searchParams] = useSearchParams();
+  const continueSaleId = searchParams.get('saleId') || '';
   const [search, setSearch] = useState('');
   const [cart, setCart] = useState<CartItem[]>(() => loadCart<CartItem>());
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('CASH');
   const [amountReceived, setAmountReceived] = useState('');
   const [waiterId, setWaiterId] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [customerNote, setCustomerNote] = useState('');
+  const [targetOrder, setTargetOrder] = useState<TargetOrder | null>(null);
+  const [orderPickerOpen, setOrderPickerOpen] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
   const [toast, setToast] = useState('');
   const [queuedCount, setQueuedCount] = useState(() => loadQueue().length);
@@ -61,6 +89,41 @@ export const SalesPage: React.FC = () => {
     queryFn: () => api.get('/sales/waiters').then((res) => res.data.data),
     retry: false,
   });
+
+  const waiterLabel = (id: string): string => {
+    const staff = waiters.find((member) => member.id === id);
+    return staff ? `${staff.firstName} ${staff.lastName}`.trim() : '';
+  };
+
+  // ── Order field: "New Order" + this waiter's OPEN (unpaid) transactions ────
+  const { data: openOrders = [], isFetching: openOrdersLoading } = useQuery<Sale[]>({
+    queryKey: ['open-orders', waiterId],
+    queryFn: () => api.get('/sales/open-orders', { params: { staffId: waiterId || undefined } }).then((res) => res.data.data),
+    enabled: orderPickerOpen && online,
+    staleTime: 5000,
+  });
+
+  // "Add product / continue order" entry point from the Transactions panel.
+  const { data: continueSale } = useQuery<Sale>({
+    queryKey: ['sale', continueSaleId],
+    queryFn: () => api.get(`/sales/${continueSaleId}`).then((res) => res.data.data),
+    enabled: !!continueSaleId,
+  });
+
+  useEffect(() => {
+    if (!continueSale) return;
+    if (continueSale.status !== 'PENDING') {
+      setToast('That transaction is already paid and locked');
+      window.setTimeout(() => setToast(''), 3200);
+      return;
+    }
+    // Only the transaction reference is taken over — the previously ordered
+    // products stay in the backend and are NOT loaded into the visible cart.
+    setTargetOrder(toTargetOrder(continueSale));
+    setCustomerNote(continueSale.customerNote || '');
+    if (continueSale.waiterId) setWaiterId(continueSale.waiterId);
+    else if (continueSale.cashierId) setWaiterId(continueSale.cashierId);
+  }, [continueSale]);
 
   useEffect(() => saveCart(cart), [cart]);
   useEffect(() => {
@@ -109,6 +172,10 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
   const total = Number((subtotal + tax).toFixed(2));
   const received = Number(amountReceived) || 0;
   const change = Number((received - total).toFixed(2));
+  // Preview of the continued transaction: existing total + the new cart items.
+  const mergedTotal = Number((total + (targetOrder?.total || 0)).toFixed(2));
+  const mergedPaid = targetOrder?.amountPaid || 0;
+  const mergedRemaining = Number(Math.max(mergedTotal - mergedPaid, 0).toFixed(2));
 
   const addToCart = (product: Product) => {
     if (product.stockQuantity <= 0) return;
@@ -129,6 +196,19 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
       const quantity = item.quantity + amount;
       return quantity > 0 ? [{ ...item, quantity }] : [];
     }));
+  };
+
+  // Selecting an existing open transaction only carries its reference across.
+  // Its previously ordered products stay in the backend and are NOT loaded into
+  // the visible cart — the cart holds just the new additions.
+  const selectOpenOrder = (order: Sale) => {
+    setTargetOrder(toTargetOrder(order));
+    setCustomerNote(order.customerNote || '');
+    if (order.waiterId) setWaiterId(order.waiterId);
+    else if (order.cashierId) setWaiterId(order.cashierId);
+    setOrderPickerOpen(false);
+    setToast(`New products will be added to Invoice #${order.receiptNumber}`);
+    window.setTimeout(() => setToast(''), 3200);
   };
 
   // ── NB80 hardware barcode scanner: scan instantly adds the product to cart ──
@@ -177,21 +257,51 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
     receiptNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),
+    customerNote: customerNote.trim() || undefined,
+    waiter: waiterLabel(waiterId) || undefined,
     lines: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.unitPrice * item.quantity })),
     subtotal,
     discount: 0,
     tax,
     total,
+    amountPaid: markPaid ? received : 0,
+    remaining: markPaid ? 0 : total,
     paymentMethod,
     amountReceived: markPaid ? received : 0,
     change: markPaid ? change : 0,
   });
+
+  // Receipt for a merged (continued) transaction: contains every product on the
+  // transaction, old and new, plus the accumulated payments.
+  const buildReceiptFromSale = (sale: Sale): ReceiptData => {
+    const summary = paymentSummary(sale);
+    return {
+      storeName: BUSINESS.name,
+      receiptNumber: sale.receiptNumber,
+      cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : (me ? `${me.firstName} ${me.lastName}` : 'ONYX POS'),
+      createdAt: new Date(sale.createdAt).toLocaleString(),
+      customerNote: sale.customerNote || undefined,
+      waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
+      lines: (sale.items || []).map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
+      subtotal: sale.subtotal,
+      discount: sale.discount,
+      tax: sale.tax,
+      total: sale.total,
+      amountPaid: summary.amountPaid,
+      remaining: summary.remaining,
+      paymentMethod: sale.paymentMethod,
+      amountReceived: sale.amountReceived ?? summary.amountPaid,
+      change: sale.change ?? 0,
+    };
+  };
 
   const buildInvoiceData = (invoiceNumber: string): InvoiceData => ({
     storeName: BUSINESS.name,
     invoiceNumber,
     cashier: me ? `${me.firstName} ${me.lastName}` : 'ONYX POS',
     createdAt: new Date().toLocaleString(),
+    customerNote: customerNote.trim() || undefined,
+    waiter: waiterLabel(waiterId) || undefined,
     lines: cart.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.unitPrice * item.quantity })),
     subtotal,
     discount: 0,
@@ -209,6 +319,7 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
         markPaid: true,
         waiterId: waiterId || undefined,
         customerPhone: customerPhone.trim() || undefined,
+        customerNote: customerNote.trim() || undefined,
       };
       if (!online) {
         queueSale(payload);
@@ -247,6 +358,7 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
         markPaid: false,
         waiterId: waiterId || undefined,
         customerPhone: customerPhone.trim() || undefined,
+        customerNote: customerNote.trim() || undefined,
       };
       if (!online) {
         queueSale(payload);
@@ -269,7 +381,53 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
     },
   });
 
-const sendSmsReceipt = async (saleId: string, phone: string) => {
+  // Appends the visible cart to the selected OPEN transaction. The existing
+  // transaction/invoice id is reused — no new transaction, no new invoice, and
+  // previously ordered products are never removed or reduced.
+  const continueOrderMutation = useMutation({
+    mutationFn: async (mode: 'unpaid' | 'paid') => {
+      if (!targetOrder) throw new Error('Select an open transaction first');
+      if (!online) throw new Error('Go online to add products to an existing order');
+      const items = cart.map((item) => ({ productId: item.productId, quantity: item.quantity, discount: 0, discountType: 'percentage' }));
+      const appended = await api.post(`/sales/${targetOrder.id}/items`, {
+        items,
+        customerNote: customerNote.trim() || undefined,
+      });
+      const after = appended.data.data as Sale;
+      // "Add & Mark Paid" settles whatever is still outstanding on the merged invoice.
+      const summary = paymentSummary(after);
+      if (mode === 'paid' && summary.remaining > 0) {
+        const paid = await api.post(`/sales/${after.id}/payment`, { paymentMethod, amount: summary.remaining });
+        return { sale: paid.data.data as Sale, receiptNumber: after.receiptNumber, mode };
+      }
+      return { sale: after, receiptNumber: after.receiptNumber, mode };
+    },
+    onSuccess: (res) => {
+      const phone = customerPhone.trim();
+      clearCart();
+      setCart([]);
+      setAmountReceived('');
+      setCustomerPhone('');
+      setTargetOrder(null);
+      setOrderPickerOpen(false);
+      setSmsStatus('');
+      queryClient.invalidateQueries({ queryKey: ['products-search'] });
+      queryClient.invalidateQueries({ queryKey: ['products'] });
+      queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['open-orders'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] });
+      if (res.mode === 'paid') {
+        setPrintPrompt(buildReceiptFromSale(res.sale));
+        setReceiptViewId(res.sale.id);
+        setSmsContactPhone(phone);
+      } else {
+        setToast(`Products added to Invoice #${res.receiptNumber}. It stays open until it is fully paid.`);
+        window.setTimeout(() => setToast(''), 3600);
+      }
+    },
+  });
+
+  const sendSmsReceipt = async (saleId: string, phone: string) => {
     if (!online) {
       setToast('Go online to send SMS receipts');
       window.setTimeout(() => setToast(''), 3000);
@@ -323,7 +481,17 @@ const sendSmsReceipt = async (saleId: string, phone: string) => {
         </section>
 
 <aside ref={cartRef} className="rounded-3xl border border-white/80 bg-white/85 p-5 shadow-2xl shadow-slate-300/40 backdrop-blur-xl">
-          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-semibold text-brand-700">Current order</p><h2 className="text-2xl font-bold">Cart <span className="text-slate-400">({cart.length})</span></h2></div><button type="button" onClick={() => { clearCart(); setCart([]); }} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button></div>
+          <div className="mb-4 flex items-center justify-between"><div><p className="text-sm font-semibold text-brand-700">{targetOrder ? `Adding to Invoice #${targetOrder.receiptNumber}` : 'Current order'}</p><h2 className="text-2xl font-bold">{targetOrder ? 'New items' : 'Cart'} <span className="text-slate-400">({cart.length})</span></h2></div><button type="button" onClick={() => { clearCart(); setCart([]); }} className="rounded-xl p-2 text-slate-400 hover:bg-red-50 hover:text-red-600" title="Clear cart"><Trash2 size={18} /></button></div>
+          {targetOrder && (
+            <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <div className="flex items-center justify-between gap-2">
+                <p className="font-bold uppercase tracking-wider">Continuing Invoice #{targetOrder.receiptNumber}</p>
+                <button type="button" onClick={() => setTargetOrder(null)} className="rounded-lg px-2 py-1 font-semibold hover:bg-amber-100">Start new order</button>
+              </div>
+              <p className="mt-1">On this order: total {money(targetOrder.total)} &middot; paid {money(targetOrder.amountPaid)} &middot; remaining {money(targetOrder.remaining)}</p>
+              <p className="mt-1">Products already on the invoice stay untouched. Only the new items below are added to the same invoice.</p>
+            </div>
+          )}
           <div className="mb-5 max-h-[38vh] space-y-3 overflow-y-auto pr-1">
             {cart.map((item) => <div key={item.productId} className="rounded-2xl onyx-brand-gradient p-3 shadow-md shadow-red-950/20"><div className="flex justify-between gap-3"><div><p className="font-semibold text-white drop-shadow-sm">{item.name}</p><p className="text-xs text-white/80">{money(item.unitPrice)} each</p></div><strong className="text-white drop-shadow-sm">{money(item.unitPrice * item.quantity)}</strong></div><div className="mt-3 flex items-center gap-2"><button type="button" onClick={() => updateQuantity(item.productId, -1)} className="rounded-xl bg-white/20 p-2 text-white transition hover:bg-white/30"><Minus size={16} /></button><span className="min-w-8 text-center font-bold text-white">{item.quantity}</span><button type="button" onClick={() => updateQuantity(item.productId, 1)} className="rounded-xl bg-white/20 p-2 text-white transition hover:bg-white/30"><Plus size={16} /></button></div></div>)}
             {!cart.length && <div className="rounded-2xl border border-dashed border-sky-200 p-8 text-center text-slate-500">Your cart is ready.</div>}
@@ -333,10 +501,34 @@ const sendSmsReceipt = async (saleId: string, phone: string) => {
             <p className="text-xs font-bold uppercase tracking-wider text-brand-700">Order details</p>
             <label className="block">
               <span className="flex items-center gap-1 text-xs font-semibold text-slate-600"><UserRound size={13} /> Served by (waiter)</span>
-              <select value={waiterId} onChange={(event) => setWaiterId(event.target.value)} className="mt-1 h-11 w-full rounded-xl border border-red-100 bg-white px-3 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-red-300">
+              <select value={waiterId} onChange={(event) => { setWaiterId(event.target.value); setTargetOrder(null); setOrderPickerOpen(false); }} className="mt-1 h-11 w-full rounded-xl border border-red-100 bg-white px-3 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-red-300">
                 <option value="">No waiter selected</option>
                 {waiters.map((waiter) => <option key={waiter.id} value={waiter.id}>{waiter.firstName} {waiter.lastName}</option>)}
               </select>
+            </label>
+            <div className="relative">
+              <span className="flex items-center gap-1 text-xs font-semibold text-slate-600"><FileText size={13} /> Order</span>
+              <button type="button" onClick={() => setOrderPickerOpen((open) => !open)} className="mt-1 flex h-11 w-full items-center justify-between rounded-xl border border-red-100 bg-white px-3 text-left text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-red-300">
+                <span className={targetOrder ? 'font-semibold text-brand-700' : 'text-slate-700'}>{targetOrder ? `Invoice #${targetOrder.receiptNumber}` : 'New Order'}</span>
+                <span className="text-xs text-slate-400">{orderPickerOpen ? 'close' : 'change'}</span>
+              </button>
+              {orderPickerOpen && (
+                <div className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto rounded-2xl border border-red-100 bg-white p-2 shadow-xl">
+                  <button type="button" onClick={() => { setTargetOrder(null); setOrderPickerOpen(false); }} className="w-full rounded-xl px-3 py-2 text-left text-sm font-semibold text-slate-800 hover:bg-red-50">New Order</button>
+                  {openOrdersLoading && <p className="px-3 py-2 text-xs text-slate-500">Loading open orders...</p>}
+                  {!openOrdersLoading && !openOrders.length && <p className="px-3 py-2 text-xs text-slate-500">No open (unpaid) orders{waiterId ? ' for this waiter' : ''}.</p>}
+                  {openOrders.map((order) => (
+                    <button key={order.id} type="button" onClick={() => selectOpenOrder(order)} className="w-full rounded-xl px-3 py-2 text-left text-sm hover:bg-red-50">
+                      <span className="block font-semibold text-slate-800">Invoice #{order.receiptNumber}</span>
+                      <span className="block text-xs text-slate-500">{money(order.total)} &middot; paid {money(paymentSummary(order).amountPaid)} &middot; owing {money(paymentSummary(order).remaining)}{order.customerNote ? ` · ${order.customerNote}` : ''}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+            <label className="block">
+              <span className="flex items-center gap-1 text-xs font-semibold text-slate-600"><FileText size={13} /> Customer note (table / person)</span>
+              <input value={customerNote} onChange={(event) => setCustomerNote(event.target.value)} placeholder="e.g. Table 5 / tall man" className="mt-1 h-11 w-full rounded-xl border border-red-100 bg-white px-3 text-sm outline-none transition focus:border-brand-400 focus:ring-2 focus:ring-red-300" />
             </label>
             <label className="block">
               <span className="flex items-center gap-1 text-xs font-semibold text-slate-600"><Phone size={13} /> Customer phone (SMS receipt)</span>
@@ -345,10 +537,17 @@ const sendSmsReceipt = async (saleId: string, phone: string) => {
           </div>
 
           <div className="space-y-2 border-t border-slate-200 pt-4 text-sm">
-            <div className="flex justify-between"><span>Subtotal</span><strong>{money(subtotal)}</strong></div>
+            <div className="flex justify-between"><span>Subtotal{targetOrder ? ' (new items)' : ''}</span><strong>{money(subtotal)}</strong></div>
             <div className="flex justify-between"><span>Tax</span><strong>{money(tax)}</strong></div>
-            <div className="flex justify-between pt-2 text-2xl font-bold"><span>Total</span><strong className="text-sky-700">{money(total)}</strong></div>
+            <div className="flex justify-between pt-2 text-2xl font-bold"><span>{targetOrder ? 'New items' : 'Total'}</span><strong className="text-sky-700">{money(total)}</strong></div>
           </div>
+          {targetOrder && (
+            <div className="mt-3 space-y-1 rounded-2xl bg-red-50 p-3 text-sm">
+              <div className="flex justify-between"><span>Invoice total after adding</span><strong>{money(mergedTotal)}</strong></div>
+              <div className="flex justify-between"><span>Amount paid</span><strong>{money(mergedPaid)}</strong></div>
+              <div className="flex justify-between"><span>Remaining</span><strong className={mergedRemaining > 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(mergedRemaining)}</strong></div>
+            </div>
+          )}
           <div className="mt-5 grid grid-cols-2 gap-2">
             {(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
               <button type="button" key={method} onClick={() => setPaymentMethod(method)}
@@ -358,21 +557,30 @@ const sendSmsReceipt = async (saleId: string, phone: string) => {
               </button>
             ))}
           </div>
-          <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)}
-            placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-red-50 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-red-300" />
-          <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className={change < 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(change)}</span></div>
+          {!targetOrder && (
+            <>
+              <input type="number" min="0" step="0.01" value={amountReceived} onChange={(event) => setAmountReceived(event.target.value)}
+                placeholder="Amount received" className="mt-4 h-14 w-full rounded-2xl border-0 bg-red-50 px-4 text-lg outline-none ring-2 ring-transparent focus:ring-red-300" />
+              <div className="mt-3 flex justify-between text-lg font-bold"><span>Change</span><span className={change < 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(change)}</span></div>
+            </>
+          )}
           <div className="mt-5 grid grid-cols-2 gap-3">
-            <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700" loading={markPaidMutation.isPending} disabled={!cart.length || received < total}
-              onClick={() => markPaidMutation.mutate()}>
-              <CheckCircle className="mr-2" size={20} />Mark as Paid
+            <Button className="h-14 rounded-2xl bg-emerald-600 text-lg font-bold hover:bg-emerald-700"
+              loading={targetOrder ? continueOrderMutation.isPending : markPaidMutation.isPending}
+              disabled={!cart.length || (targetOrder ? !online : received < total)}
+              onClick={() => (targetOrder ? continueOrderMutation.mutate('paid') : markPaidMutation.mutate())}>
+              <CheckCircle className="mr-2" size={20} />{targetOrder ? 'Add & Mark Paid' : 'Mark as Paid'}
             </Button>
-            <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600" loading={saveUnpaidMutation.isPending} disabled={!cart.length}
-              onClick={() => saveUnpaidMutation.mutate()}>
-              <FileText className="mr-2" size={20} />Save as Unpaid
+            <Button className="h-14 rounded-2xl bg-amber-500 text-lg font-bold hover:bg-amber-600"
+              loading={targetOrder ? continueOrderMutation.isPending : saveUnpaidMutation.isPending}
+              disabled={!cart.length || (targetOrder ? !online : false)}
+              onClick={() => (targetOrder ? continueOrderMutation.mutate('unpaid') : saveUnpaidMutation.mutate())}>
+              <FileText className="mr-2" size={20} />{targetOrder ? 'Add to Invoice' : 'Save as Unpaid'}
             </Button>
           </div>
-          {markPaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(markPaidMutation.error)} Cart was not cleared.</p>}
-          {saveUnpaidMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(saveUnpaidMutation.error)} Cart was not cleared.</p>}
+          {markPaidMutation.isError && !targetOrder && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(markPaidMutation.error)} Cart was not cleared.</p>}
+          {saveUnpaidMutation.isError && !targetOrder && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(saveUnpaidMutation.error)} Cart was not cleared.</p>}
+          {continueOrderMutation.isError && <p className="mt-3 rounded-xl bg-red-50 p-3 text-sm text-red-700">{handleApiError(continueOrderMutation.error)}</p>}
         </aside>
       </div>
 
