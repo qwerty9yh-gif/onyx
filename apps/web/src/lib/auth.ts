@@ -10,13 +10,13 @@ export function getToken(): string | null {
 
 export function setToken(token: string): void {
   localStorage.setItem(TOKEN_KEY, token);
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+  api.defaults.headers.common.Authorization = `Bearer ${token}`;
 }
 
 export function clearToken(): void {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
-  delete api.defaults.headers.common['Authorization'];
+  delete api.defaults.headers.common.Authorization;
 }
 
 export function getUser(): User | null {
@@ -42,7 +42,6 @@ export async function loginByCard(userId: string, password: string) {
   }
   setToken(token);
   setUser(user);
-  api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   return user;
 }
 
@@ -58,6 +57,6 @@ export async function logout() {
 export function initAuth() {
   const token = getToken();
   if (token) {
-    api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+    api.defaults.headers.common.Authorization = `Bearer ${token}`;
   }
 }
