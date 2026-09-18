@@ -70,7 +70,7 @@ async function main() {
     const category = await prisma.category.upsert({ where: { id: `catalog-${slug(categoryName).toLowerCase()}` }, update: { name: categoryName, isActive: true }, create: { id: `catalog-${slug(categoryName).toLowerCase()}`, name: categoryName, isActive: true } });
     for (const [name, price] of items) {
       const sku = `CAT-${slug(name)}`;
-      const existing = await prisma.product.findFirst({ where: { name } });
+      const existing = await prisma.product.findFirst({ where: { OR: [{ name }, { sku }] } });
       if (existing) continue;
       await prisma.product.create({ data: { name, sku, categoryId: category.id, sellingPrice: price ?? 0, costPrice: 0, stockQuantity: 0, minimumStock: 0, status: 'ACTIVE', localId: `catalog-${slug(name).toLowerCase()}` } });
       imported += 1;
