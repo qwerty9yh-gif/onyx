@@ -202,10 +202,34 @@ button, input, select {
   box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.28);
 }
 
-/* Print styles for receipts & invoices (A4 + thermal) */
+/* ============ Responsive: hide bottom nav on PC ============ */
+@media (min-width: 1024px) {
+  .cashier-dock {
+    display: none !important;
+  }
+}
+
+/* ============ Print styles ============ */
 @media print {
   body {
     background: #ffffff;
+    margin: 0;
+    padding: 0;
+  }
+  .cashier-dock,
+  .bottom-nav,
+  .sidebar,
+  .topbar,
+  .nav-sidebar,
+  .page-header-actions,
+  .no-print,
+  button,
+  .btn,
+  .action-bar,
+  .tab-bar,
+  .tab-bar *,
+  .print-header-hide {
+    display: none !important;
   }
   .onyx-print-area {
     width: 100%;

@@ -89,7 +89,7 @@ export const NotificationsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="warning">{product.stockQuantity} left · min {product.minimumStock}</Badge>
-                  {adminView && <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => navigate(`/products/${product.id}/edit`)}>Restock / Edit</Button>}
+                  {adminView && <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => navigate('/incoming')}>Restock / Edit</Button>}
                 </div>
               </div>
             ))}
@@ -111,7 +111,7 @@ export const NotificationsPage: React.FC = () => {
                 </div>
                 <div className="flex items-center gap-3">
                   <Badge variant="danger">0 in stock</Badge>
-                  {adminView && <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => navigate(`/products/${product.id}/edit`)}>Restock / Edit</Button>}
+                  {adminView && <Button size="sm" variant="secondary" className="rounded-xl" onClick={() => navigate('/incoming')}>Restock / Edit</Button>}
                 </div>
               </div>
             ))}
