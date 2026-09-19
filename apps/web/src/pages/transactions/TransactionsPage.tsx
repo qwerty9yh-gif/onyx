@@ -239,8 +239,8 @@ return <div className="mx-auto max-w-6xl space-y-6">
         return (
         <button key={member.id} type="button" role="tab" aria-selected={activeStaffId === member.id}
           onClick={() => setStaffId(activeStaffId === member.id && canSeeEveryone ? '' : member.id)}
-          className={`relative rounded-full px-4 py-2 text-sm font-bold transition ${activeStaffId === member.id ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>
-          <span className="hidden sm:inline">{staffLabel(member)}</span>
+          className={`relative rounded-full px-3 py-2 text-sm font-bold transition ${activeStaffId === member.id ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>
+          <span className="whitespace-nowrap">{staffLabel(member)}</span>
           {badgeCount > 0 && (
             <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-700 px-1 text-[9px] font-bold text-white">{badgeCount}</span>
           )}
