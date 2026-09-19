@@ -2,11 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { Phone, Plus, Printer, Receipt, Search, Send, UserRound, WalletCards, X } from 'lucide-react';
-import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
+import { api, handleApiError, sendSmsInvoice, sendSmsReceipt } from '../../lib/api';
 import { triggerDashboardRefresh } from '../../lib/offline';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
-import { printInvoice, type InvoiceData } from '../../lib/printer';
+import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 import type { Sale } from '../../lib/types';
 import { money, paymentSummary } from '../../lib/helpers';
 
@@ -42,6 +42,7 @@ function invoiceFor(sale: Sale): InvoiceData {
     invoiceNumber: sale.receiptNumber,
     cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
     createdAt: new Date(sale.createdAt).toLocaleString(),
+    customer: sale.customer?.name,
     waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
     customerNote: sale.customerNote || undefined,
     lines: (sale.items || []).map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
@@ -52,6 +53,29 @@ function invoiceFor(sale: Sale): InvoiceData {
     amountPaid: summary.amountPaid,
     remaining: summary.remaining,
     status: isPaid(sale) ? 'PAID' : 'UNPAID',
+  };
+}
+
+function receiptFor(sale: Sale): ReceiptData {
+  const summary = paymentSummary(sale);
+  return {
+    storeName: 'ONYX LOUNGE / PUB',
+    receiptNumber: sale.receiptNumber,
+    cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
+    createdAt: new Date(sale.createdAt).toLocaleString(),
+    customer: sale.customer?.name,
+    waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
+    customerNote: sale.customerNote || undefined,
+    lines: (sale.items || []).map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
+    subtotal: sale.subtotal,
+    discount: sale.discount,
+    tax: sale.tax,
+    total: sale.total,
+    amountPaid: summary.amountPaid,
+    remaining: summary.remaining,
+    paymentMethod: sale.paymentMethod as ReceiptData['paymentMethod'],
+    amountReceived: summary.amountPaid,
+    change: Math.max(summary.amountPaid - sale.total, 0),
   };
 }
 
@@ -96,6 +120,13 @@ export const TransactionsPage: React.FC = () => {
       },
     }).then((res) => res.data.data),
   });
+  const { data: unpaidForBadges = [] } = useQuery<Sale[]>({
+    queryKey: ['transaction-unpaid-counts', activeStaffId],
+    queryFn: () => api.get('/sales', {
+      params: { limit: 1000, status: 'PENDING', staffId: activeStaffId || undefined },
+    }).then((res) => res.data.data),
+    staleTime: 0,
+  });
   const payMutation = useMutation({
     mutationFn: (args: { sale: Sale; amount: number }) => api.post(`/sales/${args.sale.id}/payment`, {
       paymentMethod,
@@ -121,11 +152,25 @@ const list = useMemo(() => sales
   const paid = list.filter(isPaid);
   const unpaid = list.filter(isUnpaid);
   const closed = list.filter(isClosed);
-  // For normal workers the server already scoped the list, so chips show only them.
+      const unpaidByWaiter = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const sale of unpaidForBadges) {
+      const waiterId = sale.waiter?.id || '';
+      if (waiterId) counts[waiterId] = (counts[waiterId] || 0) + 1;
+    }
+    return counts;
+  }, [unpaidForBadges]);
   const chips: StaffMember[] = canSeeEveryone ? staff : staff.filter((member) => member.id === activeStaffId);
-  const staffLabel = (member: StaffMember) => `${member.firstName} ${member.lastName}`.trim() || 'Staff';
+    const staffLabel = (member: StaffMember) => `${member.firstName} ${member.lastName}`.trim() || 'Staff';
   const open = (sale: Sale) => { setSelected(sale); setPaymentAmount(''); setSmsPhone(sale.customerPhone || sale.customer?.phone || ''); setSmsMsg(''); setError(''); };
-  const print = (sale: Sale) => { printInvoice(invoiceFor(sale)); setSelected(null); };
+  const print = (sale: Sale) => {
+    if (isPaid(sale)) {
+      printReceipt(receiptFor(sale));
+    } else {
+      printInvoice(invoiceFor(sale));
+    }
+    setSelected(null);
+  };
   const continueOrder = (sale: Sale) => { setSelected(null); navigate(`/sales?saleId=${sale.id}`); };
 
   const sendSms = async () => {
@@ -133,8 +178,10 @@ const list = useMemo(() => sales
     setSmsBusy(true);
     setSmsMsg('');
     try {
-      const result = await sendSmsInvoice(selected.id, smsPhone);
-      setSmsMsg(result.success ? `SMS invoice sent successfully (${result.messageId || 'confirmed'})` : (result.error || 'SMS could not be sent'));
+      const result = isPaid(selected)
+        ? await sendSmsReceipt(selected.id, smsPhone)
+        : await sendSmsInvoice(selected.id, smsPhone);
+      setSmsMsg(result.success ? `SMS sent successfully (${result.messageId || 'confirmed'})` : (result.error || 'SMS could not be sent'));
     } catch (sendError) {
       setSmsMsg('SMS could not be sent');
     }
@@ -187,11 +234,19 @@ return <div className="mx-auto max-w-6xl space-y-6">
         <button type="button" role="tab" aria-selected={!activeStaffId} onClick={() => setStaffId('')}
           className={`rounded-full px-4 py-2 text-sm font-bold transition ${!activeStaffId ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>All</button>
       )}
-      {chips.map((member) => (
+            {chips.map((member) => {
+        const badgeCount = unpaidByWaiter[member.id] || 0;
+        return (
         <button key={member.id} type="button" role="tab" aria-selected={activeStaffId === member.id}
           onClick={() => setStaffId(activeStaffId === member.id && canSeeEveryone ? '' : member.id)}
-          className={`rounded-full px-4 py-2 text-sm font-bold transition ${activeStaffId === member.id ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>{staffLabel(member)}</button>
-      ))}
+          className={`relative rounded-full px-4 py-2 text-sm font-bold transition ${activeStaffId === member.id ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-white text-slate-600 shadow hover:bg-red-50'}`}>
+          <span className="hidden sm:inline">{staffLabel(member)}</span>
+          {badgeCount > 0 && (
+            <span className="absolute -top-1.5 -right-1.5 flex h-5 min-w-[20px] items-center justify-center rounded-full bg-brand-700 px-1 text-[9px] font-bold text-white">{badgeCount}</span>
+          )}
+        </button>
+        );
+      })}
     </div>
     <div className="flex flex-col gap-4 rounded-3xl border border-red-100 bg-white/85 p-4 shadow-lg shadow-red-950/10 sm:flex-row">
       <div className="relative flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-700" size={18} /><input value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search receipt or customer" className="h-12 w-full rounded-2xl bg-red-50 pl-10 pr-4 outline-none focus:ring-2 focus:ring-red-300" /></div>
@@ -207,7 +262,7 @@ return <div className="mx-auto max-w-6xl space-y-6">
 
 {selected && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/45 p-4">
-        <div className="w-full max-w-md rounded-3xl bg-white shadow-2xl">
+        <div className="flex max-h-[calc(100dvh-2rem)] w-full max-w-md flex-col overflow-hidden rounded-3xl bg-white shadow-2xl">
           <div className="onyx-brand-gradient flex items-center justify-between rounded-t-3xl px-5 py-4">
             <div>
               <h2 className="text-lg font-extrabold text-white">{selected.receiptNumber}</h2>
@@ -215,17 +270,18 @@ return <div className="mx-auto max-w-6xl space-y-6">
             </div>
             <button type="button" onClick={() => setSelected(null)} aria-label="Close" className="rounded-lg p-1 text-white/90 hover:bg-white/20"><X size={20} /></button>
           </div>
-          <div className="space-y-4 p-5">
+                          <div className="min-h-0 max-h-[calc(100dvh-6rem)] space-y-3 overflow-y-auto p-4 sm:p-5">
             {statusBadge(selected)}
-            <div className="grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Waiter: <span className="font-semibold text-slate-800">{selected.waiter ? `${selected.waiter.firstName} ${selected.waiter.lastName}` : '—'}</span></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Invoice: <span className="font-semibold text-slate-800">{selected.receiptNumber}</span></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Ordered by: <span className="font-semibold text-slate-800">{selected.cashier ? `${selected.cashier.firstName} ${selected.cashier.lastName}` : '—'}</span></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Date: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleString()}</span></div>
-              <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Payment: <span className="font-semibold text-slate-800">{selected.paymentMethod}</span></div>
-              {selected.customerNote && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Note: <span className="font-semibold text-slate-800">{selected.customerNote}</span></div>}
-              {selected.customer?.name && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Customer: <span className="font-semibold text-slate-800">{selected.customer.name}</span></div>}
-              {(selected.customerPhone || selected.customer?.phone) && <div className="rounded-2xl bg-red-50/60 px-3 py-2 text-xs text-slate-500">Phone: <span className="font-semibold text-slate-800">{selected.customerPhone || selected.customer?.phone}</span></div>}
+                        <div className="grid grid-cols-2 gap-1.5 text-[11px] sm:text-xs">
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">{isPaid(selected) ? 'Receipt' : 'Invoice'}: <span className="font-semibold text-slate-800">{selected.receiptNumber}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Date: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleDateString()}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Time: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleTimeString()}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Payment: <span className="font-semibold text-slate-800">{selected.paymentMethod}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Waiter: <span className="font-semibold text-slate-800">{selected.waiter ? `${selected.waiter.firstName} ${selected.waiter.lastName}` : '—'}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Cashier: <span className="font-semibold text-slate-800">{selected.cashier ? `${selected.cashier.firstName} ${selected.cashier.lastName}` : '—'}</span></div>
+              {selected.customerNote && <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-xs text-slate-500">Note: <span className="font-semibold text-slate-800">{selected.customerNote}</span></div>}
+              {selected.customer?.name && <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-xs text-slate-500">Customer: <span className="font-semibold text-slate-800">{selected.customer.name}</span></div>}
+              {(selected.customerPhone || selected.customer?.phone) && <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-xs text-slate-500">Phone: <span className="font-semibold text-slate-800">{selected.customerPhone || selected.customer?.phone}</span></div>}
             </div>
             <div className="overflow-hidden rounded-2xl border border-red-100">
               <div className="max-h-44 space-y-1 overflow-y-auto p-3">
@@ -244,6 +300,14 @@ return <div className="mx-auto max-w-6xl space-y-6">
               </div>
             </div>
             {isPaid(selected) && (
+              <div className="space-y-3 rounded-2xl border border-brand-200 bg-red-50/50 p-3">
+                <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Send size={13} /> Send receipt by SMS</p>
+                <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500" size={15} /><input value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)} placeholder="Customer phone" className="h-11 w-full rounded-xl border border-red-100 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-red-300" /></div>
+                {smsMsg && <p className={`text-xs font-medium ${smsMsg.includes('successfully') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
+                <Button className="w-full rounded-xl bg-brand-700 text-white hover:bg-brand-800" variant="primary" loading={smsBusy} disabled={!smsPhone} onClick={sendSms}><Send size={16} />Send SMS receipt</Button>
+              </div>
+            )}
+            {!isPaid(selected) && !isClosed(selected) && (
               <div className="space-y-3 rounded-2xl border border-brand-200 bg-red-50/50 p-3">
                 <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Send size={13} /> Send invoice by SMS</p>
                 <div className="relative"><Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500" size={15} /><input value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)} placeholder="Customer phone" className="h-11 w-full rounded-xl border border-red-100 bg-white pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-red-300" /></div>
@@ -278,7 +342,7 @@ return <div className="mx-auto max-w-6xl space-y-6">
                   <Button variant="outline" className="rounded-2xl" onClick={() => continueOrder(selected)}><Plus className="mr-2" size={18} />Add product</Button>
                 </>
               )}
-              <Button variant="outline" className="rounded-2xl" onClick={() => print(selected)}><Printer className="mr-2" size={18} />Print invoice</Button>
+                            <Button variant="outline" className="rounded-2xl" onClick={() => print(selected)}><Printer className="mr-2" size={18} />{isPaid(selected) ? 'Print receipt' : 'Print invoice'}</Button>
             </div>
           </div>
         </div>

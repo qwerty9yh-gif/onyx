@@ -136,7 +136,7 @@ router.post('/broadcast', async (req: AuthenticatedRequest, res, next) => {
     });
     res.json({
       success: true,
-      data: { sent, failed, total: customers.length },
+      data: { success: customers.length > 0 && failed === 0, sent, failed, total: customers.length },
       message: `Notification sent to ${sent} customer${sent === 1 ? '' : 's'}${failed ? ` (${failed} failed)` : ''}`,
     });
   } catch (err) { next(err); }

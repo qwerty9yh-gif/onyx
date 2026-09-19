@@ -2,12 +2,12 @@ import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { Phone, Printer, Send, UserRound } from 'lucide-react';
-import { api, sendSmsInvoice } from '../../lib/api';
+import { api, sendSmsInvoice, sendSmsReceipt } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import type { Sale, SaleItem } from '../../lib/types';
 import { money, paymentSummary } from '../../lib/helpers';
-import { printReceipt, type ReceiptData } from '../../lib/printer';
+import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 
 export const ReceiptPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -24,11 +24,25 @@ export const ReceiptPage: React.FC = () => {
 
   const print = () => {
     const summary = paymentSummary(sale);
+    if (sale.status === 'PENDING') {
+      const invoice: InvoiceData = {
+        storeName: 'ONYX LOUNGE / PUB', invoiceNumber: sale.receiptNumber,
+        cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
+        createdAt: new Date(sale.createdAt).toLocaleString(), customer: sale.customer?.name,
+        customerNote: sale.customerNote || undefined, waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
+        lines: sale.items.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
+        subtotal: sale.subtotal, discount: sale.discount, tax: sale.tax, total: sale.total,
+        amountPaid: summary.amountPaid, remaining: summary.remaining, status: 'UNPAID',
+      };
+      printInvoice(invoice);
+      return;
+    }
     const receipt: ReceiptData = {
       storeName: 'ONYX LOUNGE / PUB',
       receiptNumber: sale.receiptNumber,
       cashier: sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS',
       createdAt: new Date(sale.createdAt).toLocaleString(),
+      customer: sale.customer?.name,
       customerNote: sale.customerNote || undefined,
       waiter: sale.waiter ? `${sale.waiter.firstName} ${sale.waiter.lastName}` : undefined,
       lines: sale.items.map((item) => ({ name: item.name, quantity: item.quantity, unitPrice: item.unitPrice, total: item.total })),
@@ -50,8 +64,10 @@ export const ReceiptPage: React.FC = () => {
     setSmsBusy(true);
     setSmsMsg('');
     try {
-      const result = await sendSmsInvoice(id, smsPhone.trim());
-      setSmsMsg(result.success ? 'SMS receipt sent successfully' : (result.error || 'SMS could not be sent'));
+      const result = sale.status === 'COMPLETED'
+        ? await sendSmsReceipt(id, smsPhone.trim())
+        : await sendSmsInvoice(id, smsPhone.trim());
+      setSmsMsg(result.success ? `SMS ${sale.status === 'COMPLETED' ? 'receipt' : 'invoice'} sent successfully` : (result.error || 'SMS could not be sent'));
     } catch {
       setSmsMsg('SMS could not be sent');
     }
@@ -63,12 +79,12 @@ return (
       <header className="rounded-3xl border border-white/80 bg-white/90 p-6 shadow-xl shadow-red-950/10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">Receipt</p>
+            <p className="text-sm font-semibold uppercase tracking-widest text-brand-700">{sale.status === 'PENDING' ? 'Invoice' : 'Receipt'}</p>
             <h2 className="text-2xl font-extrabold text-slate-900">#{sale.receiptNumber}</h2>
           </div>
           <div className="flex items-center gap-2">
             {sale.status === 'COMPLETED' ? <Badge variant="success">Paid</Badge> : sale.status === 'PENDING' ? <Badge variant="warning">Unpaid</Badge> : sale.status === 'VOIDED' ? <Badge variant="outline">Voided</Badge> : <Badge variant="danger">Refunded</Badge>}
-            <button onClick={print} className="rounded-xl bg-red-50 p-2 text-brand-700 transition hover:bg-red-100" title="Print receipt"><Printer size={18} /></button>
+            <button onClick={print} className="rounded-xl bg-red-50 p-2 text-brand-700 transition hover:bg-red-100" title={sale.status === 'PENDING' ? 'Print invoice' : 'Print receipt'}><Printer size={18} /></button>
           </div>
         </div>
         <div className="mt-4 grid grid-cols-1 gap-2 text-sm sm:grid-cols-2">
@@ -107,15 +123,15 @@ return (
         </div>
       </section>
 
-      {sale.status === 'COMPLETED' && (
+      {(sale.status === 'COMPLETED' || sale.status === 'PENDING') && (
         <section className="rounded-3xl border border-brand-200 bg-white/90 p-4 shadow-xl shadow-red-950/10">
-          <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Send size={13} /> Send receipt by SMS</p>
+          <p className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Send size={13} /> Send {sale.status === 'COMPLETED' ? 'receipt' : 'invoice'} by SMS</p>
           <div className="mt-3 flex flex-col gap-3 sm:flex-row">
             <div className="relative flex-1">
               <Phone className="absolute left-3 top-1/2 -translate-y-1/2 text-brand-500" size={15} />
               <input value={smsPhone} onChange={(e) => setSmsPhone(e.target.value)} placeholder={sale.customerPhone || sale.customer?.phone || 'Customer phone'} className="h-11 w-full rounded-xl border border-red-100 bg-red-50/60 pl-9 pr-3 text-sm outline-none focus:ring-2 focus:ring-red-300" />
             </div>
-            <Button className="rounded-xl bg-brand-700 text-white hover:bg-brand-800" loading={smsBusy} disabled={!smsPhone.trim()} onClick={sendSms}><Send size={16} />Send SMS</Button>
+            <Button className="rounded-xl bg-brand-700 text-white hover:bg-brand-800" loading={smsBusy} disabled={!smsPhone.trim()} onClick={sendSms}><Send size={16} />Send SMS {sale.status === 'COMPLETED' ? 'receipt' : 'invoice'}</Button>
           </div>
           {smsMsg && <p className={`mt-2 text-xs font-medium ${smsMsg.includes('successfully') ? 'text-emerald-700' : 'text-red-600'}`}>{smsMsg}</p>}
         </section>

@@ -116,65 +116,130 @@ export async function sendSms(to: string, text: string): Promise<SmsSendResult> 
 }
 
 /**
- * Build an SMS invoice message from sale data.
+ * Format a GHS monetary value for SMS output.
+ */
+function fmtGhs(value: number): string {
+  return `GHS ${(value || 0).toFixed(2)}`;
+}
+
+/**
+ * Build an SMS receipt message from sale data (for PAID transactions).
+ */
+export function buildSmsReceipt(sale: {
+  receiptNumber: string;
+  customerName?: string | null;
+  customerPhone?: string | null;
+  total: number;
+  amountPaid?: number | null;
+  change?: number | null;
+  paymentMethod?: string | null;
+  items?: Array<{ name: string; quantity: number; total: number }>;
+}): string {
+  const lines: string[] = [];
+  lines.push('ONYX LOUNGE / PUB');
+  lines.push('Receipt: ' + sale.receiptNumber);
+  if (sale.customerName) lines.push('Customer: ' + sale.customerName);
+  lines.push('Total: ' + fmtGhs(sale.total));
+  if (typeof sale.amountPaid === 'number') lines.push('Paid: ' + fmtGhs(sale.amountPaid));
+  if (sale.paymentMethod) lines.push('Payment: ' + sale.paymentMethod);
+  if (typeof sale.change === 'number' && sale.change > 0) lines.push('Change: ' + fmtGhs(sale.change));
+  if (sale.items && sale.items.length) {
+    for (const it of sale.items.slice(0, 5)) {
+      lines.push('- ' + it.name + ' x' + it.quantity + ': ' + fmtGhs(it.total));
+    }
+    if (sale.items.length > 5) lines.push('... +' + (sale.items.length - 5) + ' more items');
+  }
+  lines.push('Thank you for choosing ONYX POS!');
+  return lines.join('\n');
+}
+
+/**
+ * Build an SMS invoice message from sale data (for UNPAID transactions).
+ * Includes payment summary so the customer knows what is still owed.
  */
 export function buildSmsInvoice(sale: {
   receiptNumber: string;
   customerName?: string | null;
   customerPhone?: string | null;
   total: number;
-  items: Array<{ name: string; quantity: number; total: number }>;
-  businessName?: string;
-}, options?: { includeItems?: boolean }): string {
+  amountPaid?: number | null;
+  remaining?: number | null;
+  status?: string | null;
+  items?: Array<{ name: string; quantity: number; total: number }>;
+}): string {
   const lines: string[] = [];
-  const bName = options?.includeItems ? sale.businessName : undefined;
-  if (bName) lines.push(`${bName} Invoice`);
-  lines.push(`Receipt: ${sale.receiptNumber}`);
-  if (sale.customerName) lines.push(`Customer: ${sale.customerName}`);
-  lines.push(`Total: GHS ${sale.total.toFixed(2)}`);
-  if (options?.includeItems !== false && sale.items && sale.items.length) {
+  lines.push('ONYX LOUNGE / PUB');
+  lines.push('Invoice: ' + sale.receiptNumber);
+  if (sale.customerName) lines.push('Customer: ' + sale.customerName);
+  lines.push('Total: ' + fmtGhs(sale.total));
+  if (typeof sale.amountPaid === 'number') lines.push('Paid: ' + fmtGhs(sale.amountPaid));
+  const remaining = typeof sale.remaining === 'number' ? sale.remaining : (sale.total - (sale.amountPaid || 0));
+  const remainingClamped = Math.max(remaining, 0);
+  lines.push('Remaining: ' + fmtGhs(remainingClamped));
+  lines.push('Status: ' + (sale.status || 'UNPAID'));
+  if (sale.items && sale.items.length) {
     for (const it of sale.items.slice(0, 5)) {
-      lines.push(`- ${it.name} x${it.quantity}: GHS ${it.total.toFixed(2)}`);
+      lines.push('- ' + it.name + ' x' + it.quantity + ': ' + fmtGhs(it.total));
     }
-    if (sale.items.length > 5) lines.push(`... +${sale.items.length - 5} more items`);
+    if (sale.items.length > 5) lines.push('... +' + (sale.items.length - 5) + ' more items');
   }
+  lines.push('Please settle the remaining balance at ONYX LOUNGE / PUB.');
   return lines.join('\n');
 }
 
 /**
- * Queue / send an SMS invoice for a completed sale.
+ * Resolve the recipient phone number for a sale.
+ */
+async function resolvePhone(sale: { customerPhone?: string | null; customerId?: string | null; id: string }): Promise<string | null> {
+  let phone = sale.customerPhone;
+  if (!phone && sale.customerId) {
+    const cust = await prisma.customer.findUnique({ where: { id: sale.customerId } });
+    phone = cust?.phone || '';
+    if (phone) {
+      await prisma.sale.update({ where: { id: sale.id }, data: { customerPhone: phone } });
+    }
+  }
+  return phone || null;
+}
+
+/** Helper: compute amountPaid and remaining from payments */
+function computePayment(sale: { payments?: Array<{ amount: number }>; amountReceived?: number | null; total: number }) {
+  const payments = sale.payments || [];
+  const fromPayments = payments.reduce((sum, p) => sum + (p.amount || 0), 0);
+  const amountPaid = fromPayments > 0
+    ? Math.round(fromPayments * 100) / 100
+    : Math.round((sale.amountReceived || 0) * 100) / 100;
+  const remaining = Math.max(Math.round((sale.total - amountPaid) * 100) / 100, 0);
+  return { amountPaid, remaining };
+}
+
+/**
+ * Queue / send an SMS invoice for an UNPAID sale.
  * Creates an audit-log entry for the SMS attempt.
  */
 export async function sendInvoiceSms(saleId: string, overridePhone?: string): Promise<SmsSendResult> {
   const sale = await prisma.sale.findUnique({
     where: { id: saleId },
-    include: { items: { orderBy: { productId: 'asc' } }, customer: { select: { name: true } } },
+    include: { items: { orderBy: { productId: 'asc' } }, customer: { select: { name: true } }, payments: true },
   });
   if (!sale) throw new AppError('Sale not found', 404);
-  if (sale.status !== 'COMPLETED') throw new AppError('Only completed sales can receive SMS invoices', 400);
-
-  let phone = overridePhone || sale.customerPhone;
-  if (!phone && sale.customerId) {
-    // Try customer.phone if sale.customerPhone is absent
-    const cust = await prisma.customer.findUnique({ where: { id: sale.customerId } });
-    phone = cust?.phone || '';
-    if (phone) {
-      // update sale.customerPhone for future reference
-      await prisma.sale.update({ where: { id: saleId }, data: { customerPhone: phone } });
-    }
-  }
+  // Invoices are for UNPAID transactions — do not require COMPLETED status
+  const phone = overridePhone || (await resolvePhone(sale));
   if (!phone) return { success: false, error: 'No phone number on sale or customer' };
 
+  const { amountPaid, remaining } = computePayment(sale);
   const smsText = buildSmsInvoice({
     receiptNumber: sale.receiptNumber,
     customerName: sale.customer?.name ?? undefined,
     customerPhone: sale.customerPhone,
     total: sale.total,
+    amountPaid,
+    remaining,
+    status: sale.status,
     items: sale.items,
-  }, { includeItems: true });
+  });
 
   const result = await sendSms(phone, smsText);
-
   try {
     await prisma.auditLog.create({
       data: {
@@ -193,6 +258,53 @@ export async function sendInvoiceSms(saleId: string, overridePhone?: string): Pr
   } catch (auditErr) {
     console.error('SMS audit log failed:', auditErr);
   }
+  return result;
+}
 
+/**
+ * Queue / send an SMS receipt for a PAID (completed) sale.
+ * Creates an audit-log entry for the SMS attempt.
+ */
+export async function sendReceiptSms(saleId: string, overridePhone?: string): Promise<SmsSendResult> {
+  const sale = await prisma.sale.findUnique({
+    where: { id: saleId },
+    include: { items: { orderBy: { productId: 'asc' } }, customer: { select: { name: true } }, payments: true },
+  });
+  if (!sale) throw new AppError('Sale not found', 404);
+  const phone = overridePhone || (await resolvePhone(sale));
+  if (!phone) return { success: false, error: 'No phone number on sale or customer' };
+
+  const { amountPaid, remaining } = computePayment(sale);
+  const change = Math.max(amountPaid - sale.total, 0);
+  const smsText = buildSmsReceipt({
+    receiptNumber: sale.receiptNumber,
+    customerName: sale.customer?.name ?? undefined,
+    customerPhone: sale.customerPhone,
+    total: sale.total,
+    amountPaid,
+    change,
+    paymentMethod: sale.paymentMethod,
+    items: sale.items,
+  });
+
+  const result = await sendSms(phone, smsText);
+  try {
+    await prisma.auditLog.create({
+      data: {
+        userId: null,
+        action: result.success ? 'SMS_RECEIPT_SENT' : 'SMS_RECEIPT_FAILED',
+        entity: 'sale',
+        entityId: saleId,
+        details: {
+          receiptNumber: sale.receiptNumber,
+          phone,
+          message: result.messageId || result.error,
+          success: result.success,
+        },
+      },
+    });
+  } catch (auditErr) {
+    console.error('SMS audit log failed:', auditErr);
+  }
   return result;
 }

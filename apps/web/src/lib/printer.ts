@@ -180,7 +180,7 @@ export function buildEscPosReceipt(receipt: ReceiptData): Uint8Array {
 export function buildEscPosInvoice(invoice: InvoiceData): Uint8Array {
   const qr = qrMatrix(`ONYX|${invoice.invoiceNumber}|${invoice.total.toFixed(2)}`);
   const chunks: Uint8Array[] = [
-    text(`${ESC}@${ESC}a\x01ONYX POS\n`),
+    text(`${ESC}@${ESC}a\x01ONYX LOUNGE / PUB\n`),
     text(`${ESC}a\x00${VENUE_NAME}\n${VENUE_LOCATION}\n${VENUE_PHONE}\n`),
     text(`${ESC}a\x01Invoice ${invoice.invoiceNumber}\n`),
     text(`${ESC}a\x00${invoice.createdAt}\nCashier: ${invoice.cashier}${invoice.customer ? `\nCustomer: ${invoice.customer}` : ''}\nStatus: ${invoice.status || 'UNPAID'} ${invoice.dueDate ? ` · Due ${invoice.dueDate}` : ''}\n`),
@@ -347,6 +347,48 @@ export function printReceipt(receipt: ReceiptData): void {
       <footer>Thank you for choosing ONYX POS</footer>
     </div>`;
   printDocument(html, `Receipt ${receipt.receiptNumber}`);
+}
+
+/** Report data for the printable business report. */
+export interface ReportItem {
+  name: string;
+  quantity: number;
+  unitPrice: number;
+  total: number;
+}
+
+export interface ReportData {
+  storeName: string;
+  venueName: string;
+  venueLocation: string;
+  venuePhone: string;
+  title: string;
+  date: string;
+  sales: {
+    totalSales: number;
+    totalRevenue: number;
+    transactionCount: number;
+    paidCount: number;
+    unpaidCount: number;
+    refundedCount: number;
+    avgTransaction: number;
+  };
+  inventory: {
+    totalProducts: number;
+    totalStock: number;
+    totalValue: number;
+    lowStock: number;
+    outOfStock: number;
+  };
+  payments: Array<{ method: string; amount: number }>;
+  topProducts: ReportItem[];
+}
+
+export function printReport(data: ReportData): void {
+  const esc = (v: string) => String(v).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const fm = (v: number) => `GH₵${(v || 0).toFixed(2)}`;
+  const html = `\n    <div class=\"sheet\">\n      <header>\n        <h1>${esc(data.storeName)}</h1>\n        <div class=\"meta\">${esc(data.venueName)}<br/>${esc(data.venueLocation)}<br/>${esc(data.venuePhone)}</div>\n        <div class=\"doc\">${esc(data.title)}</div>\n        <div class=\"meta\">${esc(data.date)}</div>\n      </header>\n\n      <table class=\"infos\">\n        <tr><td>Report type</td><td><strong>${esc(data.title)}</strong></td></tr>\n        <tr><td>Date</td><td>${esc(data.date)}</td></tr>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">A. SALES SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Metric</th><th class=\"r\">Value</th></tr></thead>\n        <tbody>\n          <tr><td>Total Sales</td><td class=\"r\">${fm(data.sales.totalSales)}</td></tr>\n          <tr><td>Total Revenue</td><td class=\"r\">${fm(data.sales.totalRevenue)}</td></tr>\n          <tr><td>Number of Transactions</td><td class=\"r\">${data.sales.transactionCount}</td></tr>\n          <tr><td>Paid Transactions</td><td class=\"r\">${data.sales.paidCount}</td></tr>\n          <tr><td>Unpaid/Pending Transactions</td><td class=\"r\">${data.sales.unpaidCount}</td></tr>\n          <tr><td>Refunded Transactions</td><td class=\"r\">${data.sales.refundedCount}</td></tr>\n          <tr><td>Average Transaction</td><td class=\"r\">${fm(data.sales.avgTransaction)}</td></tr>\n        </tbody>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">B. INVENTORY SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Metric</th><th class=\"r\">Value</th></tr></thead>\n        <tbody>\n          <tr><td>Total Products</td><td class=\"r\">${data.inventory.totalProducts}</td></tr>\n          <tr><td>Total Stock Units</td><td class=\"r\">${data.inventory.totalStock}</td></tr>\n          <tr><td>Total Inventory Value</td><td class=\"r\">${fm(data.inventory.totalValue)}</td></tr>\n          <tr><td>Low Stock Items</td><td class=\"r\">${data.inventory.lowStock}</td></tr>\n          <tr><td>Out-of-Stock Items</td><td class=\"r\">${data.inventory.outOfStock}</td></tr>\n        </tbody>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">C. PAYMENT SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Method</th><th class=\"r\">Amount</th></tr></thead>\n        <tbody>\n          ${data.payments.map((p) => `<tr><td>${esc(p.method)}</td><td class=\"r\">${fm(p.amount)}</td></tr>`).join('')}\n          <tr class=\"sep\"><td colspan=\"2\"></td></tr>\n          <tr class=\"grand\"><td>Total Payments</td><td class=\"r\">${fm(data.payments.reduce((sum, p) => sum + (p.amount || 0), 0))}</td></tr>\n        </tbody>\n      </table>\n\n      ${data.topProducts && data.topProducts.length ? `\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">D. TOP PRODUCTS</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Item</th><th class=\"c\">Qty</th><th class=\"r\">Unit Price</th><th class=\"r\">Total</th></tr></thead>\n        <tbody>\n          ${data.topProducts.map((item) => `<tr><td>${esc(item.name)}</td><td class=\"c\">${item.quantity}</td><td class=\"r\">${fm(item.unitPrice)}</td><td class=\"r\">${fm(item.total)}</td></tr>`).join('')}\n        </tbody>\n      </table>\n      ` : ''}\n      <div class=\"qr\"><img src=\"${qrSvgDataUrl(`ONYX|${esc(data.title)}|${data.date}`, 6, 4)}\" alt=\"QR\" width=\"120\" height=\"120\" /></div>\n      <footer>Generated ${esc(data.date)} by ONYX POS</footer>\n    </div>`;
+  printDocument(html, esc(data.title));
 }
 
 export function printInvoice(invoice: InvoiceData): void {

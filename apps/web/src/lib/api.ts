@@ -73,17 +73,22 @@ export interface SmsSendResult {
 
 export async function sendSmsInvoice(saleId: string, phone?: string): Promise<SmsSendResult> {
   const res = await api.post(`/sales/${saleId}/sms-invoice`, { phone: phone || undefined });
-  return res.data.data as SmsSendResult;
+  return { success: res.data.success === true, messageId: res.data.data?.messageId, error: res.data.data?.error };
 }
 
-export async function broadcastCustomerSms(title: string, message: string): Promise<{ sent: number; failed: number; total: number }> {
+export async function sendSmsReceipt(saleId: string, phone?: string): Promise<SmsSendResult> {
+  const res = await api.post(`/sales/${saleId}/sms-receipt`, { phone: phone || undefined });
+  return { success: res.data.success === true, messageId: res.data.data?.messageId, error: res.data.data?.error };
+}
+
+export async function broadcastCustomerSms(title: string, message: string): Promise<{ success: boolean; sent: number; failed: number; total: number }> {
   const res = await api.post('/customers/broadcast', { title, message });
-  return res.data.data as { sent: number; failed: number; total: number };
+  return res.data.data as { success: boolean; sent: number; failed: number; total: number };
 }
 
 export async function messageCustomer(customerId: string, title: string, message: string): Promise<SmsSendResult> {
   const res = await api.post(`/customers/${customerId}/message`, { title, message });
-  return res.data.data as SmsSendResult;
+  return { success: res.data.success === true, messageId: res.data.data?.messageId, error: res.data.data?.error };
 }
 
 /**

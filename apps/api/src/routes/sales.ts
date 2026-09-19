@@ -543,15 +543,31 @@ router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
   } catch (err) { next(err); }
 });
 
+// POST /api/sales/:id/sms-receipt - Send SMS receipt to customer (PAID transactions)
+router.post('/:id/sms-receipt', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    const { phone } = req.body;
+    const sale = await prisma.sale.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!sale || sale.status !== 'COMPLETED') throw new AppError('Receipts are available only for paid transactions', 400);
+    const { sendReceiptSms } = await import('../services/sms.js');
+    const result = await sendReceiptSms(req.params.id, phone || undefined);
+    if (!result.success) throw new AppError(result.error || 'SMS send failed', 500);
+    res.json({ success: true, data: { success: true, messageId: result.messageId }, message: 'SMS receipt sent' });
+  } catch (err) { next(err); }
+});
+
 // POST /api/sales/:id/sms-invoice - Send SMS invoice to customer
 router.post('/:id/sms-invoice', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'CASHIER', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!['ADMIN', 'MANAGER', 'CASHIER', 'INVENTORY_STAFF', 'WORKER', 'WAITER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { phone } = req.body;
+    const sale = await prisma.sale.findUnique({ where: { id: req.params.id }, select: { status: true } });
+    if (!sale || sale.status !== 'PENDING') throw new AppError('Invoices are available only for unpaid transactions', 400);
     const { sendInvoiceSms } = await import('../services/sms.js');
     const result = await sendInvoiceSms(req.params.id, phone || undefined);
     if (!result.success) throw new AppError(result.error || 'SMS send failed', 500);
-    res.json({ success: true, data: { messageId: result.messageId }, message: 'SMS invoice sent' });
+    res.json({ success: true, data: { success: true, messageId: result.messageId }, message: 'SMS invoice sent' });
   } catch (err) { next(err); }
 });
 
