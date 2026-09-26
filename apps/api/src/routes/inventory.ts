@@ -7,6 +7,14 @@ import { generateLocalId } from '../utils/helpers.js';
 
 const router = Router();
 
+// Roles permitted to run Incoming Goods (search → add → commit → inventory update → receipt).
+// The Incoming panel is visible to every authenticated user, so every role must be
+// able to commit successfully — this list must always match the frontend visibility
+// so a Commit can never return 403/Forbidden for a user who can see the panel.
+const INCOMING_GOODS_ROLES: string[] = [
+  'ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER', 'WAITER', 'CASHIER',
+];
+
 // ── Batch receiving schemas ──
 const batchItemSchema = z.object({
   productId: z.string().min(1),
@@ -32,8 +40,8 @@ const batchInclude = {
 // POST /api/inventory/batches — commit one receiving session as one batch.
 router.post('/batches', async (req: AuthenticatedRequest, res, next) => {
   try {
-    // Workers get full Incoming Goods access: search, add items, commit.
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    // Workers/waiters get full Incoming Goods access: search, add items, commit.
+    if (!INCOMING_GOODS_ROLES.includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const body = createBatchSchema.parse(req.body);
     if (body.supplierId) {
       const supplier = await prisma.supplier.findUnique({ where: { id: body.supplierId } });
@@ -185,7 +193,7 @@ router.post('/adjust', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/inventory/stock-in - Stock in
 router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!INCOMING_GOODS_ROLES.includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { productId, quantity, unitPrice, supplierId, purchaseOrder, notes } = req.body;
     if (!productId || !quantity || quantity <= 0) throw new AppError('Valid product and quantity required', 400);
     const product = await prisma.product.findUnique({ where: { id: productId } });
@@ -210,7 +218,7 @@ router.post('/stock-in', async (req: AuthenticatedRequest, res, next) => {
 // POST /api/inventory/receive - Record a simple incoming-goods receipt.
 router.post('/receive', async (req: AuthenticatedRequest, res, next) => {
   try {
-    if (!['ADMIN', 'MANAGER', 'INVENTORY_STAFF', 'WORKER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
+    if (!INCOMING_GOODS_ROLES.includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const { supplierId, productId, quantity } = req.body;
     const parsedQuantity = Number(quantity);
     if (!supplierId || !productId || !Number.isInteger(parsedQuantity) || parsedQuantity <= 0) {

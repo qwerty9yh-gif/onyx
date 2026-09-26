@@ -24,11 +24,25 @@ const defaultUsers: Array<{
 
 async function seedUsers() {
   for (const u of defaultUsers) {
+    const existing = await prisma.user.findUnique({ where: { email: u.email }, select: { id: true } });
+    if (existing) {
+      // The database is the single source of truth. Never overwrite an existing
+      // account's password (or mustChangePassword) during seeding/restart, so a
+      // password changed by the user stays permanent until they change it again.
+      continue;
+    }
     const passwordHash = await bcrypt.hash(u.password, 12);
-    await prisma.user.upsert({
-      where: { email: u.email },
-      update: { username: u.username, role: u.role, status: 'ACTIVE', firstName: u.firstName, lastName: u.lastName, passwordHash, mustChangePassword: u.mustChangePassword, deletedAt: null },
-      create: { email: u.email, username: u.username, firstName: u.firstName, lastName: u.lastName, role: u.role, status: 'ACTIVE', passwordHash, mustChangePassword: u.mustChangePassword },
+    await prisma.user.create({
+      data: {
+        email: u.email,
+        username: u.username,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        status: 'ACTIVE',
+        passwordHash,
+        mustChangePassword: u.mustChangePassword,
+      },
     });
   }
   console.log(`ONYX accounts ready: ${defaultUsers.length}`);

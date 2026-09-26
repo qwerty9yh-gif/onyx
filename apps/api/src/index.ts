@@ -26,6 +26,11 @@ import { hashPassword } from './utils/helpers.js';
 
 const app = express();
 
+// Admin bootstrap account — used ONLY to create the very first admin row.
+// It is never written over an existing admin, so a password changed by the
+// admin is stored in the database and stays permanent until they change it again.
+const ADMIN_BOOTSTRAP_EMAIL = 'qwerty9yh@gmail.com';
+
 // Render terminates TLS and forwards the client address in X-Forwarded-For.
 app.set('trust proxy', 1);
 
@@ -99,30 +104,34 @@ const startServer = async () => {
     await prisma.$queryRaw`SELECT 1`;
     console.log('✓ Database connected');
 
-    const adminPasswordHash = await hashPassword('123456789');
-    const admin = await prisma.user.upsert({
-      where: { email: 'qwerty9yh@gmail.com' },
-      update: {
-        username: 'Admin k',
-        firstName: 'ONYX',
-        lastName: 'Administrator',
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        passwordHash: adminPasswordHash,
-        deletedAt: null,
-      },
-      create: {
-        email: 'qwerty9yh@gmail.com',
-        username: 'Admin k',
-        firstName: 'ONYX',
-        lastName: 'Administrator',
-        role: 'ADMIN',
-        status: 'ACTIVE',
-        passwordHash: adminPasswordHash,
-      },
+    // Database is the single source of truth for credentials.
+    // Only CREATE the default admin when it does not exist yet — never overwrite
+    // an existing admin's passwordHash, role, or profile on startup/restart.
+    const existingAdmin = await prisma.user.findUnique({
+      where: { email: ADMIN_BOOTSTRAP_EMAIL },
       select: { id: true, email: true, username: true, role: true, status: true },
     });
-    console.log(`✓ Admin account ready: ${admin.email} (${admin.username}, ${admin.status})`);
+
+    let admin = existingAdmin;
+    if (!admin) {
+      const adminPasswordHash = await hashPassword('123456789');
+      admin = await prisma.user.create({
+        data: {
+          email: ADMIN_BOOTSTRAP_EMAIL,
+          username: 'Admin k',
+          firstName: 'ONYX',
+          lastName: 'Administrator',
+          role: 'ADMIN',
+          status: 'ACTIVE',
+          passwordHash: adminPasswordHash,
+          mustChangePassword: false,
+        },
+        select: { id: true, email: true, username: true, role: true, status: true },
+      });
+      console.log(`✓ Admin account created: ${admin.email}`);
+    } else {
+      console.log(`✓ Admin account ready (password untouched): ${admin.email} (${admin.username}, ${admin.status})`);
+    }
 
     app.listen(config.port, '0.0.0.0', () => {
       console.log(`✓ Server running on port ${config.port}`);
