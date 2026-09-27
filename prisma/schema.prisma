@@ -45,6 +45,7 @@ enum SyncStatus {
 enum PaymentMethod {
   CASH
   MOMO
+  BANK_TRANSFER
   CARD
   TRANSFER
   QR
@@ -503,6 +504,7 @@ model DailyReport {
   unpaidTotal       Float    @default(0)
   cashTotal         Float    @default(0)
   momoTotal         Float    @default(0)
+  bankTransferTotal Float    @default(0)
   transactionCount  Int      @default(0)
   paidCount         Int      @default(0)
   unpaidCount       Int      @default(0)

@@ -134,12 +134,14 @@ export const TransactionsPage: React.FC = () => {
     }),
     onSuccess: (res) => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['transaction-unpaid-counts'] });
       queryClient.invalidateQueries({ queryKey: ['open-orders'] });
       queryClient.invalidateQueries({ queryKey: ['products-search'] });
       queryClient.invalidateQueries({ queryKey: ['products'] });
       queryClient.invalidateQueries({ queryKey: ['dashboard'] });
       triggerDashboardRefresh();
-      setSelected(res.data.data as Sale);
+      const updatedSale = res.data.data as Sale;
+      setSelected(updatedSale.status === 'COMPLETED' ? null : updatedSale);
       setPaymentAmount('');
       setError('');
     },

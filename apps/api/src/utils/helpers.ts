@@ -5,7 +5,8 @@ import { config } from '../config/index.js';
 
 const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CASH: 'Cash',
-  MOMO: 'Bank Transfer',
+  MOMO: 'MoMo',
+  BANK_TRANSFER: 'Bank Transfer',
   TRANSFER: 'MoMo',
   CARD: 'Card',
   QR: 'QR',

@@ -424,6 +424,7 @@ export interface DailyReportPrintData {
     unpaidTotal: number;
     cashTotal: number;
     momoTotal: number;
+    bankTransferTotal: number;
     transactionCount: number;
     paidCount: number;
     unpaidCount: number;
@@ -461,7 +462,7 @@ export function printDailyReport(report: DailyReportPrintData, targetWindow?: Wi
       <table>
         <tbody>
           <tr><th>Business Date</th><td>${esc(dateLabel)}</td></tr>
-          <tr><th>Time Range</th><td>5:00 AM → 4:59 AM (Africa/Accra)</td></tr>
+          <tr><th>Time Range</th><td>5:00 AM → 4:59:59 AM (Africa/Accra)</td></tr>
           <tr><th>Generated</th><td>${esc(generatedLabel)}</td></tr>
         </tbody>
       </table>
@@ -472,6 +473,7 @@ export function printDailyReport(report: DailyReportPrintData, targetWindow?: Wi
         <tr><td>Outstanding Unpaid</td><td class="r">${fm(report.summary.unpaidTotal)}</td></tr>
         <tr><td>Cash</td><td class="r">${fm(report.summary.cashTotal)}</td></tr>
         <tr><td>MoMo</td><td class="r">${fm(report.summary.momoTotal)}</td></tr>
+        <tr><td>Bank Transfer</td><td class="r">${fm(report.summary.bankTransferTotal)}</td></tr>
       </tbody></table>
       <h2>Transaction Summary</h2>
       <table><tbody>

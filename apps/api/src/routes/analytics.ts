@@ -2,26 +2,42 @@ import { Prisma } from '@prisma/client';
 import { Router } from 'express';
 import { prisma } from '../utils/prisma.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { calculateReportRange } from '../services/dailyReports.js';
+import { getBusinessDate, getBusinessDayRange, shiftBusinessDate } from '../utils/businessDay.js';
 
 const router = Router();
+
+function startOfBusinessWeek(businessDate: string): string {
+  const [year, month, day] = businessDate.split('-').map(Number);
+  const weekday = new Date(Date.UTC(year, month - 1, day)).getUTCDay();
+  return shiftBusinessDate(businessDate, -weekday);
+}
+
+function requestedBusinessDate(value: unknown, fallback: string): string {
+  const date = typeof value === 'string' ? value : '';
+  if (!date) return fallback;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(date)) return date;
+  return getBusinessDate(new Date(date));
+}
 
 // GET /api/analytics/dashboard - Dashboard stats
 router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
   try {
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
-    const startOfWeek = new Date(startOfDay);
-    startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay());
-    const startOfMonth = new Date();
-    startOfMonth.setDate(1);
-    startOfMonth.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const businessDate = getBusinessDate(now);
+    const dayRange = getBusinessDayRange(businessDate);
+    const weekRange = getBusinessDayRange(startOfBusinessWeek(businessDate));
+    const monthRange = getBusinessDayRange(`${businessDate.slice(0, 7)}-01`);
+    const todayWhere = { status: 'COMPLETED' as const, createdAt: { gte: dayRange.startTime, lt: now } };
+    const weekWhere = { status: 'COMPLETED' as const, createdAt: { gte: weekRange.startTime, lt: now } };
+    const monthWhere = { status: 'COMPLETED' as const, createdAt: { gte: monthRange.startTime, lt: now } };
     const [todaySales, weekSales, monthSales, todayRevenue, weekRevenue, monthRevenue, totalTransactions, avgTransaction, lowStock, outOfStock, pendingInvoices, topProducts, topCategories, recentActivity] = await Promise.all([
-      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } } }),
-      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } } }),
-      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } } }),
-      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfDay } }, _sum: { total: true } }),
-      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfWeek } }, _sum: { total: true } }),
-      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: startOfMonth } }, _sum: { total: true } }),
+      prisma.sale.count({ where: todayWhere }),
+      prisma.sale.count({ where: weekWhere }),
+      prisma.sale.count({ where: monthWhere }),
+      prisma.sale.aggregate({ where: todayWhere, _sum: { total: true } }),
+      prisma.sale.aggregate({ where: weekWhere, _sum: { total: true } }),
+      prisma.sale.aggregate({ where: monthWhere, _sum: { total: true } }),
       prisma.sale.count({ where: { status: 'COMPLETED' } }),
       prisma.sale.aggregate({ where: { status: 'COMPLETED' }, _avg: { total: true } }),
       prisma.product.count({ where: { status: 'ACTIVE', stockQuantity: { lt: 10, gt: 0 } } }),
@@ -54,19 +70,28 @@ router.get('/dashboard', async (req: AuthenticatedRequest, res, next) => {
 // GET /api/analytics/sales-summary - Sales summary by period
 router.get('/sales-summary', async (req: AuthenticatedRequest, res, next) => {
   try {
-    const { period = 'day', startDate, endDate } = req.query;
-    const start = startDate ? new Date(startDate as string) : new Date();
-    start.setHours(0, 0, 0, 0);
-    const end = endDate ? new Date(endDate as string) : new Date();
-    end.setHours(23, 59, 59, 999);
-    const where: Prisma.SaleWhereInput = { status: 'COMPLETED', createdAt: { gte: start, lte: end } };
-    const [sales, revenue, transactions, avg, byPayment] = await Promise.all([
+    const period = String(req.query.period || 'day');
+    const currentBusinessDate = getBusinessDate(new Date());
+    const endBusinessDate = requestedBusinessDate(req.query.endDate, currentBusinessDate);
+    const startBusinessDate = requestedBusinessDate(
+      req.query.startDate,
+      period === 'week' ? startOfBusinessWeek(endBusinessDate)
+        : period === 'month' ? `${endBusinessDate.slice(0, 7)}-01`
+          : endBusinessDate,
+    );
+    const start = getBusinessDayRange(startBusinessDate).startTime;
+    const end = req.query.endDate
+      ? getBusinessDayRange(shiftBusinessDate(endBusinessDate, 1)).startTime
+      : new Date();
+    const where: Prisma.SaleWhereInput = { status: 'COMPLETED', createdAt: { gte: start, lt: end } };
+    const [sales, revenue, transactions, avg, report] = await Promise.all([
       prisma.sale.count({ where }),
       prisma.sale.aggregate({ where, _sum: { total: true } }),
       prisma.sale.count({ where }),
       prisma.sale.aggregate({ where, _avg: { total: true } }),
-      prisma.payment.groupBy({ by: ['method'], _sum: { amount: true }, where: { sale: { status: 'COMPLETED', createdAt: { gte: start, lte: end } } }, orderBy: { _sum: { amount: 'desc' } } })
+      calculateReportRange(startBusinessDate, start, end),
     ]);
+    const byPayment = report.payments.map((payment) => ({ method: payment.method, _sum: { amount: payment.amount } }));
     res.json({ success: true, data: { sales, revenue: revenue._sum?.total || 0, transactions, avg: avg._avg?.total || 0, byPayment } });
   } catch (err) { next(err); }
 });
@@ -91,16 +116,25 @@ router.get('/inventory-summary', async (req: AuthenticatedRequest, res, next) =>
 router.get('/sales-trend', async (req: AuthenticatedRequest, res, next) => {
   try {
     const days = Math.min(Math.max(parseInt(req.query.days as string) || 7, 2), 31);
-    const start = new Date();
-    start.setHours(0, 0, 0, 0);
-    start.setDate(start.getDate() - (days - 1));
-    const sales = await prisma.sale.findMany({ where: { status: 'COMPLETED', createdAt: { gte: start } }, select: { createdAt: true, total: true } });
+    const lastBusinessDate = getBusinessDate(new Date());
+    const firstBusinessDate = shiftBusinessDate(lastBusinessDate, -(days - 1));
+    const { startTime } = getBusinessDayRange(firstBusinessDate);
+    const now = new Date();
+    const sales = await prisma.$queryRaw<Array<{ date: string; sales: number; revenue: number }>>`
+      SELECT
+        ((s."createdAt" AT TIME ZONE 'Africa/Accra' - INTERVAL '5 hours')::date)::text AS date,
+        COUNT(*)::int AS sales,
+        ROUND(COALESCE(SUM(ROUND(s.total::numeric, 2)), 0), 2)::float8 AS revenue
+      FROM "Sale" s
+      WHERE s.status = 'COMPLETED' AND s."createdAt" >= ${startTime} AND s."createdAt" < ${now}
+      GROUP BY date
+      ORDER BY date
+    `;
+    const salesByDate = new Map(sales.map((row) => [row.date, row]));
     const trend = Array.from({ length: days }, (_, index) => {
-      const date = new Date(start);
-      date.setDate(start.getDate() + index);
-      const key = date.toISOString().slice(0, 10);
-      const matching = sales.filter((sale) => sale.createdAt.toISOString().slice(0, 10) === key);
-      return { date: key, sales: matching.length, revenue: matching.reduce((sum, sale) => sum + sale.total, 0) };
+      const key = shiftBusinessDate(firstBusinessDate, index);
+      const dailyTotals = salesByDate.get(key);
+      return { date: key, sales: dailyTotals?.sales || 0, revenue: dailyTotals?.revenue || 0 };
     });
     res.json({ success: true, data: trend });
   } catch (err) { next(err); }

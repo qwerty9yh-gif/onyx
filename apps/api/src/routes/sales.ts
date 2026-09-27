@@ -3,11 +3,11 @@ import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateInvoiceNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
-import { getBusinessDate } from '../utils/businessDay.js';
+import { getBusinessDate, getBusinessDayRange, shiftBusinessDate } from '../utils/businessDay.js';
 
 const router = Router();
 
-const POS_PAYMENT_METHODS = ['CASH', 'MOMO', 'TRANSFER'] as const;
+const POS_PAYMENT_METHODS = ['CASH', 'MOMO', 'BANK_TRANSFER'] as const;
 type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[number];
 
 function isPosPaymentMethod(value: unknown): value is PosPaymentMethod {
@@ -16,8 +16,10 @@ function isPosPaymentMethod(value: unknown): value is PosPaymentMethod {
 
 function resolvePaymentMethod(value: unknown, fallback: unknown = 'CASH'): PosPaymentMethod {
   if (value === undefined || value === null || value === '') {
+    if (fallback === 'TRANSFER') return 'MOMO';
     return isPosPaymentMethod(fallback) ? fallback : 'CASH';
   }
+  if (value === 'TRANSFER') return 'MOMO';
   if (!isPosPaymentMethod(value)) throw new AppError('Choose Cash, MoMo, or Bank Transfer', 400);
   return value;
 }
@@ -286,12 +288,16 @@ router.get('/', async (req: AuthenticatedRequest, res, next) => {
 // GET /api/sales/stats - Quick stats for dashboard
 router.get('/stats', async (req: AuthenticatedRequest, res, next) => {
   try {
-    const today = new Date(); today.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const businessDate = getBusinessDate(now);
+    const today = getBusinessDayRange(businessDate).startTime;
+    const weekStart = getBusinessDayRange(shiftBusinessDate(businessDate, -6)).startTime;
+    const monthStart = getBusinessDayRange(shiftBusinessDate(businessDate, -29)).startTime;
     const [todaySales, todayRevenue, weekSales, monthSales, totalTransactions] = await Promise.all([
-      prisma.sale.count({ where: { status: 'COMPLETED', completedAt: { gte: today } } }),
-      prisma.sale.aggregate({ where: { status: 'COMPLETED', completedAt: { gte: today } }, _sum: { total: true } }),
-      prisma.sale.count({ where: { status: 'COMPLETED', completedAt: { gte: new Date(today.getTime() - 7 * 86400000) } } }),
-      prisma.sale.count({ where: { status: 'COMPLETED', completedAt: { gte: new Date(today.getTime() - 30 * 86400000) } } }),
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: today, lt: now } } }),
+      prisma.sale.aggregate({ where: { status: 'COMPLETED', createdAt: { gte: today, lt: now } }, _sum: { total: true } }),
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: weekStart, lt: now } } }),
+      prisma.sale.count({ where: { status: 'COMPLETED', createdAt: { gte: monthStart, lt: now } } }),
       prisma.sale.count({ where: { status: 'COMPLETED' } }),
     ]);
     res.json({ success: true, data: {
@@ -532,6 +538,7 @@ router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
     if (!s || s.status !== 'COMPLETED') throw new AppError('Cannot refund', 400);
     if (!canViewAllTransactions(req.user?.role) && s.cashierId !== req.user!.id && s.waiterId !== req.user!.id) throw new AppError('Forbidden', 403);
     if (s.refundId) throw new AppError('Already refunded', 400);
+    const refundPaymentMethod = resolvePaymentMethod(paymentMethod, s.paymentMethod);
     const refundAmount = amountRefunded || s.total;
     if (refundAmount > s.total) throw new AppError('Refund exceeds total', 400);
     const refund = await prisma.$transaction(async (tx) => {
@@ -539,13 +546,13 @@ router.post('/:id/refund', async (req: AuthenticatedRequest, res, next) => {
         data: {
           originalSaleId: s.id, cashierId: req.user!.id, reason,
           subtotal: s.subtotal, discount: s.discount, tax: s.tax,
-          total: refundAmount, paymentMethod: paymentMethod || s.paymentMethod,
+          total: refundAmount, paymentMethod: refundPaymentMethod,
           amountRefunded: refundAmount, status: 'COMPLETED', completedAt: new Date()
         }
       });
       await tx.sale.update({ where: { id: s.id }, data: { status: 'REFUNDED', refundedAt: new Date(), refundId: createdRefund.id } });
       await tx.refundItem.createMany({ data: s.items.map(i => ({ refundId: createdRefund.id, saleItemId: i.id, productId: i.productId, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, subtotal: i.subtotal, tax: i.tax, total: i.total })) });
-      await tx.payment.create({ data: { saleId: s.id, method: paymentMethod || s.paymentMethod, amount: refundAmount, reference: 'Refund' } });
+      await tx.payment.create({ data: { saleId: s.id, method: refundPaymentMethod, amount: refundAmount, reference: 'Refund' } });
       for (const item of s.items) {
         const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { increment: item.quantity } } });
         await tx.inventoryMovement.create({ data: { productId: item.productId, userId: req.user!.id, type: 'REFUND', quantity: item.quantity, previousStock: product.stockQuantity - item.quantity, newStock: product.stockQuantity, referenceId: s.id, notes: 'Refund' } });

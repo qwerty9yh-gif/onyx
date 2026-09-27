@@ -2,13 +2,14 @@ import type { PaymentMethod } from './types';
 
 export const PAYMENT_METHOD_OPTIONS = [
   { method: 'CASH', label: 'Cash' },
-  { method: 'TRANSFER', label: 'MoMo' },
-  { method: 'MOMO', label: 'Bank Transfer' },
+  { method: 'MOMO', label: 'MoMo' },
+  { method: 'BANK_TRANSFER', label: 'Bank Transfer' },
 ] as const;
 
 const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   CASH: 'Cash',
-  MOMO: 'Bank Transfer',
+  MOMO: 'MoMo',
+  BANK_TRANSFER: 'Bank Transfer',
   TRANSFER: 'MoMo',
   CARD: 'Card',
   QR: 'QR',

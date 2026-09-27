@@ -21,8 +21,8 @@ interface CartItem {
 
 const PAYMENT_OPTIONS = [
   { method: 'CASH', label: 'Cash', icon: Banknote },
-  { method: 'TRANSFER', label: 'MoMo', icon: Smartphone },
-  { method: 'MOMO', label: 'Bank Transfer', icon: Landmark },
+  { method: 'MOMO', label: 'MoMo', icon: Smartphone },
+  { method: 'BANK_TRANSFER', label: 'Bank Transfer', icon: Landmark },
 ] as const;
 
 interface StaffMember {

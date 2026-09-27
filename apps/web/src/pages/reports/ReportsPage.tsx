@@ -57,6 +57,7 @@ export const ReportsPage: React.FC = () => {
   const unpaidTotal = Number(salesMeta.unpaidTotal || 0);
   const cashTotal = Number(salesMeta.cashTotal || 0);
   const momoTotal = Number(salesMeta.momoTotal || 0);
+  const bankTransferTotal = Number(salesMeta.bankTransferTotal || 0);
   const totalDiscount = Number(salesMeta.totalDiscount || 0);
   const totalItemsSold = Number(salesMeta.totalItemsSold || 0);
   const transactionCount = Number(salesMeta.transactionCount || 0);
@@ -191,12 +192,13 @@ export const ReportsPage: React.FC = () => {
                       </Button>
                     </div>
                   </div>
-                  <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-5">
+                  <div className="mt-4 grid grid-cols-2 gap-x-5 gap-y-3 text-sm sm:grid-cols-3 lg:grid-cols-6">
                     <div><p className="text-xs text-slate-500">Total Sales</p><p className="font-semibold">{money(report.grossSales)}</p></div>
                     <div><p className="text-xs text-slate-500">Paid Total</p><p className="font-semibold">{money(report.paidTotal)}</p></div>
                     <div><p className="text-xs text-slate-500">Unpaid Total</p><p className="font-semibold">{money(report.unpaidTotal)}</p></div>
                     <div><p className="text-xs text-slate-500">Cash</p><p className="font-semibold">{money(report.cashTotal)}</p></div>
                     <div><p className="text-xs text-slate-500">MoMo</p><p className="font-semibold">{money(report.momoTotal)}</p></div>
+                    <div><p className="text-xs text-slate-500">Bank Transfer</p><p className="font-semibold">{money(report.bankTransferTotal)}</p></div>
                     <div><p className="text-xs text-slate-500">Paid Transactions</p><p className="font-semibold">{report.paidCount}</p></div>
                     <div><p className="text-xs text-slate-500">Unpaid Transactions</p><p className="font-semibold">{report.unpaidCount}</p></div>
                     <div><p className="text-xs text-slate-500">Total Items Sold</p><p className="font-semibold">{report.itemCount}</p></div>
@@ -221,14 +223,15 @@ export const ReportsPage: React.FC = () => {
               <header className="border-b border-slate-200 pb-4">
                 <h2 className="text-xl font-bold text-slate-900">ONYX LOUNGE / PUB</h2>
                 <p className="text-sm text-slate-600">Daily Business Report · {formatBusinessDate(selectedPrintData.businessDate)}</p>
-                <p className="text-xs text-slate-500">5:00 AM → 4:59 AM · Africa/Accra</p>
+                <p className="text-xs text-slate-500">5:00 AM → 4:59:59 AM · Africa/Accra</p>
               </header>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
                 <MoneyCard label="Gross Sales" value={selectedPrintData.summary.grossSales} />
                 <MoneyCard label="Paid Sales" value={selectedPrintData.summary.paidTotal} />
                 <MoneyCard label="Outstanding Unpaid" value={selectedPrintData.summary.unpaidTotal} />
                 <MoneyCard label="Cash" value={selectedPrintData.summary.cashTotal} />
                 <MoneyCard label="MoMo" value={selectedPrintData.summary.momoTotal} />
+                <MoneyCard label="Bank Transfer" value={selectedPrintData.summary.bankTransferTotal} />
               </div>
               <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
                 <CountCard label="Paid Count" value={selectedPrintData.summary.paidCount} />
@@ -286,6 +289,7 @@ export const ReportsPage: React.FC = () => {
               <MoneyCard label="Outstanding Unpaid" value={unpaidTotal} />
               <MoneyCard label="Cash Total" value={cashTotal} />
               <MoneyCard label="MoMo Total" value={momoTotal} />
+              <MoneyCard label="Bank Transfer Total" value={bankTransferTotal} />
               <MoneyCard label="Discounts" value={totalDiscount} />
               <CountCard label="Transactions" value={transactionCount} />
               <MoneyCard label="Avg / Transaction" value={avgTransaction} />

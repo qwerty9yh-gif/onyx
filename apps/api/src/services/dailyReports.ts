@@ -46,7 +46,7 @@ export interface DailyReportDetails {
   businessDate: string;
   startTime: string;
   endTime: string;
-  summary: SummaryRow & { cashTotal: number; momoTotal: number; otherPaidTotal: number; paymentTotal: number; itemCount: number };
+  summary: SummaryRow & { cashTotal: number; momoTotal: number; bankTransferTotal: number; otherPaidTotal: number; paymentTotal: number; itemCount: number };
   payments: Array<{ method: string; amount: number; percentage: number }>;
   products: ProductRow[];
   waiters: WaiterRow[];
@@ -95,7 +95,8 @@ export async function calculateReportRange(
     `,
     prisma.$queryRaw<PaymentRow[]>`
       WITH allocated AS (
-        SELECT p.method, ROUND(p.amount::numeric, 2) AS amount, ROUND(s.total::numeric, 2) AS total,
+        SELECT CASE WHEN p.method::text IN ('TRANSFER', 'MOMO') THEN 'MOMO' ELSE p.method::text END AS method,
+          ROUND(p.amount::numeric, 2) AS amount, ROUND(s.total::numeric, 2) AS total,
           COALESCE(SUM(ROUND(p.amount::numeric, 2)) OVER (
             PARTITION BY p."saleId" ORDER BY p."createdAt", p.id
             ROWS BETWEEN UNBOUNDED PRECEDING AND 1 PRECEDING
@@ -108,7 +109,8 @@ export async function calculateReportRange(
         SELECT method, SUM(GREATEST(LEAST(amount, total - previouslyAllocated), 0)) AS amount
         FROM allocated GROUP BY method
       ), refund_totals AS (
-        SELECT r."paymentMethod" AS method, SUM(ROUND(r."amountRefunded"::numeric, 2)) AS amount
+        SELECT CASE WHEN r."paymentMethod"::text IN ('TRANSFER', 'MOMO') THEN 'MOMO' ELSE r."paymentMethod"::text END AS method,
+          SUM(ROUND(r."amountRefunded"::numeric, 2)) AS amount
         FROM "Refund" r
         JOIN "Sale" s ON s.id = r."originalSaleId"
         WHERE r.status = 'COMPLETED' AND s.status = 'COMPLETED'
@@ -187,7 +189,8 @@ export async function calculateReportRange(
   }));
   const itemCount = products.reduce((total, product) => total + product.quantity, 0);
   const cashTotal = amount(payments.filter((payment) => payment.method === 'CASH').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
-  const momoTotal = amount(payments.filter((payment) => payment.method === 'TRANSFER').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
+  const momoTotal = amount(payments.filter((payment) => payment.method === 'MOMO').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
+  const bankTransferTotal = amount(payments.filter((payment) => payment.method === 'BANK_TRANSFER').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
   const paidTotal = amount(summary.paidTotal);
   const normalizedSummary = {
     ...summary,
@@ -202,7 +205,8 @@ export async function calculateReportRange(
     averageSale: amount(summary.averageSale),
     cashTotal,
     momoTotal,
-    otherPaidTotal: amount(Math.max(cents(paidTotal) - cents(cashTotal) - cents(momoTotal), 0) / 100),
+    bankTransferTotal,
+    otherPaidTotal: amount(Math.max(cents(paidTotal) - cents(cashTotal) - cents(momoTotal) - cents(bankTransferTotal), 0) / 100),
     paymentTotal: amount(paymentTotalCents / 100),
     itemCount,
   };
@@ -233,6 +237,7 @@ export async function createDailyReportIfMissing(businessDate: string): Promise<
       unpaidTotal: details.summary.unpaidTotal,
       cashTotal: details.summary.cashTotal,
       momoTotal: details.summary.momoTotal,
+      bankTransferTotal: details.summary.bankTransferTotal,
       transactionCount: details.summary.transactionCount,
       paidCount: details.summary.paidCount,
       unpaidCount: details.summary.unpaidCount,
