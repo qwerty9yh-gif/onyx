@@ -6,7 +6,7 @@ import { api, sendSmsInvoice, sendSmsReceipt } from '../../lib/api';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import type { Sale, SaleItem } from '../../lib/types';
-import { money, paymentSummary } from '../../lib/helpers';
+import { money, paymentMethodLabel, paymentSummary } from '../../lib/helpers';
 import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 
 export const ReceiptPage: React.FC = () => {
@@ -91,7 +91,7 @@ return (
           <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Date</span><p className="font-semibold text-slate-800">{new Date(sale.createdAt).toLocaleString()}</p></div>
           <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Cashier</span><p className="font-semibold text-slate-800">{sale.cashier ? `${sale.cashier.firstName} ${sale.cashier.lastName}` : 'ONYX POS'}</p></div>
           {sale.waiter && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><UserRound size={12} /> Waiter</span><p className="font-semibold text-slate-800">{sale.waiter.firstName} {sale.waiter.lastName}</p></div>}
-          <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Payment</span><p className="font-semibold text-slate-800">{sale.paymentMethod}</p></div>
+          <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Payment</span><p className="font-semibold text-slate-800">{paymentMethodLabel(sale.paymentMethod)}</p></div>
           {sale.customerNote && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Order note</span><p className="font-semibold text-slate-800">{sale.customerNote}</p></div>}
           {sale.customer?.name && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="text-xs font-bold uppercase tracking-wider text-brand-700">Customer</span><p className="font-semibold text-slate-800">{sale.customer.name}</p></div>}
           {(sale.customerPhone || sale.customer?.phone) && <div className="rounded-2xl bg-red-50/60 px-3 py-2"><span className="flex items-center gap-1 text-xs font-bold uppercase tracking-wider text-brand-700"><Phone size={12} /> Phone</span><p className="font-semibold text-slate-800">{sale.customerPhone || sale.customer?.phone}</p></div>}

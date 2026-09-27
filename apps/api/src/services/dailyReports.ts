@@ -187,7 +187,7 @@ export async function calculateReportRange(
   }));
   const itemCount = products.reduce((total, product) => total + product.quantity, 0);
   const cashTotal = amount(payments.filter((payment) => payment.method === 'CASH').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
-  const momoTotal = amount(payments.filter((payment) => payment.method === 'MOMO').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
+  const momoTotal = amount(payments.filter((payment) => payment.method === 'TRANSFER').reduce((total, payment) => total + cents(payment.amount), 0) / 100);
   const paidTotal = amount(summary.paidTotal);
   const normalizedSummary = {
     ...summary,

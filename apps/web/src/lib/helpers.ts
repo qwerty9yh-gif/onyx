@@ -1,3 +1,25 @@
+import type { PaymentMethod } from './types';
+
+export const PAYMENT_METHOD_OPTIONS = [
+  { method: 'CASH', label: 'Cash' },
+  { method: 'TRANSFER', label: 'MoMo' },
+  { method: 'MOMO', label: 'Bank Transfer' },
+] as const;
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: 'Cash',
+  MOMO: 'Bank Transfer',
+  TRANSFER: 'MoMo',
+  CARD: 'Card',
+  QR: 'QR',
+  OTHER: 'Other',
+};
+
+export function paymentMethodLabel(method: string | null | undefined): string {
+  if (!method) return 'Unknown';
+  return PAYMENT_METHOD_LABELS[method as PaymentMethod] || method.replace(/_/g, ' ');
+}
+
 /** Centralized currency formatter — GH₵ for the ONYX POS application */
 export const money = (value: number | string): string => {
   const num = typeof value === 'string' ? parseFloat(value) : value;

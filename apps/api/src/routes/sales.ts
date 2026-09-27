@@ -7,6 +7,21 @@ import { getBusinessDate } from '../utils/businessDay.js';
 
 const router = Router();
 
+const POS_PAYMENT_METHODS = ['CASH', 'MOMO', 'TRANSFER'] as const;
+type PosPaymentMethod = (typeof POS_PAYMENT_METHODS)[number];
+
+function isPosPaymentMethod(value: unknown): value is PosPaymentMethod {
+  return typeof value === 'string' && POS_PAYMENT_METHODS.includes(value as PosPaymentMethod);
+}
+
+function resolvePaymentMethod(value: unknown, fallback: unknown = 'CASH'): PosPaymentMethod {
+  if (value === undefined || value === null || value === '') {
+    return isPosPaymentMethod(fallback) ? fallback : 'CASH';
+  }
+  if (!isPosPaymentMethod(value)) throw new AppError('Choose Cash, MoMo, or Bank Transfer', 400);
+  return value;
+}
+
 interface SaleItemInput {
   productId: string;
   quantity: number;
@@ -93,7 +108,7 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
     const { customerId, paymentMethod, amountReceived, notes, markPaid = true, waiterId, customerPhone, customerNote } = req.body;
     const items = (req.body.items || []) as SaleItemInput[];
     if (!items.length) throw new AppError('Items required', 400);
-    if (!paymentMethod) throw new AppError('Payment method required', 400);
+    const selectedPaymentMethod = resolvePaymentMethod(paymentMethod);
     for (const item of items) {
       if (!item.productId) throw new AppError('Each line needs a product', 400);
       if (!Number.isInteger(item.quantity) || item.quantity <= 0) throw new AppError('Quantity must be a positive whole number', 400);
@@ -141,7 +156,7 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
         data: {
           receiptNumber, cashierId: req.user!.id, customerId: resolvedCustomerId, waiterId, status: markPaid ? 'COMPLETED' : 'PENDING',
           syncStatus: 'PENDING', subtotal: rawSubtotal, discount: totalDiscount, discountType: 'percentage',
-          tax: totalTax, total: grandTotal, paymentMethod, amountReceived: received, change, notes, customerPhone, customerNote: customerNoteFinal,
+          tax: totalTax, total: grandTotal, paymentMethod: selectedPaymentMethod, amountReceived: received, change, notes, customerPhone, customerNote: customerNoteFinal,
           deviceId: '', localId: localIdFinal, idempotencyKey, completedAt: markPaid ? now : null, createdAt: now
         }
       });
@@ -152,24 +167,24 @@ router.post('/', async (req: AuthenticatedRequest, res, next) => {
         }))
       });
       if (markPaid) {
-        await tx.payment.create({ data: { saleId: createdSale.id, method: paymentMethod, amount: received } });
+        await tx.payment.create({ data: { saleId: createdSale.id, method: selectedPaymentMethod, amount: received } });
         for (const item of itemsSnap) {
           const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { decrement: item.quantity } } });
           await tx.inventoryMovement.create({ data: { productId: item.productId, userId: req.user!.id, type: 'SALE', quantity: -item.quantity, previousStock: product.stockQuantity + item.quantity, newStock: product.stockQuantity, referenceId: createdSale.id, notes: `Sale ${receiptNumber}` } });
         }
         if (customerId) await tx.customer.update({ where: { id: customerId }, data: { totalSpent: { increment: grandTotal }, lastPurchase: now } });
       }
-      await tx.auditLog.create({ data: { userId: req.user!.id, action: markPaid ? 'CREATE_SALE' : 'CREATE_INVOICE', entity: 'sale', entityId: createdSale.id, details: { receiptNumber, total: grandTotal, paymentMethod, status: createdSale.status } } });
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: markPaid ? 'CREATE_SALE' : 'CREATE_INVOICE', entity: 'sale', entityId: createdSale.id, details: { receiptNumber, total: grandTotal, paymentMethod: selectedPaymentMethod, status: createdSale.status } } });
       await tx.syncOperation.create({
         data: {
           userId: req.user!.id, entity: 'sale', entityId: createdSale.id, operationType: 'create',
-          payload: { saleId: createdSale.id, items: itemsSnap, receiptNumber, subtotal: rawSubtotal, discount: totalDiscount, tax: totalTax, total: grandTotal, paymentMethod, amountReceived, change, notes, customerId },
+          payload: { saleId: createdSale.id, items: itemsSnap, receiptNumber, subtotal: rawSubtotal, discount: totalDiscount, tax: totalTax, total: grandTotal, paymentMethod: selectedPaymentMethod, amountReceived, change, notes, customerId },
           status: 'PENDING', localId: localIdFinal, serverId: createdSale.id, idempotencyKey
         }
       });
       return createdSale;
     });
-    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod, createdAt: sale.createdAt }, receiptNumber, message: markPaid ? 'Sale completed' : 'Invoice saved as unpaid' });
+    res.status(201).json({ success: true, data: { id: sale.id, receiptNumber, status: sale.status, total: grandTotal, change, paymentMethod: selectedPaymentMethod, createdAt: sale.createdAt }, receiptNumber, message: markPaid ? 'Sale completed' : 'Invoice saved as unpaid' });
   } catch (err) { next(err); }
 });
 
@@ -183,6 +198,7 @@ router.post('/:id/mark-paid', async (req: AuthenticatedRequest, res, next) => {
     if (!canViewAllTransactions(req.user?.role) && s.cashierId !== req.user!.id && s.waiterId !== req.user!.id) throw new AppError('Forbidden', 403);
     if (s.status === 'COMPLETED') return res.json({ success: true, data: withPaymentSummary(s), message: 'Already paid' });
     if (s.status !== 'PENDING') throw new AppError('Cannot mark paid', 400);
+    const selectedPaymentMethod = resolvePaymentMethod(paymentMethod, s.paymentMethod);
     const received = Number(amountReceived || s.total);
     if (received < s.total) throw new AppError('Insufficient payment', 400);
     // Only the outstanding part is recorded as a new payment so payments already
@@ -199,17 +215,17 @@ router.post('/:id/mark-paid', async (req: AuthenticatedRequest, res, next) => {
     const updated = await prisma.$transaction(async (tx) => {
       const paid = await tx.sale.update({
         where: { id: s.id },
-        data: { status: 'COMPLETED', paymentMethod: paymentMethod || s.paymentMethod, amountReceived: received, change: roundToTwoDecimals(received - s.total), completedAt: now },
+        data: { status: 'COMPLETED', paymentMethod: selectedPaymentMethod, amountReceived: received, change: roundToTwoDecimals(received - s.total), completedAt: now },
       });
       if (paymentDelta > 0) {
-        await tx.payment.create({ data: { saleId: s.id, method: paymentMethod || s.paymentMethod, amount: paymentDelta } });
+        await tx.payment.create({ data: { saleId: s.id, method: selectedPaymentMethod, amount: paymentDelta } });
       }
       for (const item of s.items) {
         const product = await tx.product.update({ where: { id: item.productId }, data: { stockQuantity: { decrement: item.quantity } } });
         await tx.inventoryMovement.create({ data: { productId: item.productId, userId: req.user!.id, type: 'SALE', quantity: -item.quantity, previousStock: product.stockQuantity + item.quantity, newStock: product.stockQuantity, referenceId: s.id, notes: `Sale ${s.receiptNumber}` } });
       }
       if (s.customerId) await tx.customer.update({ where: { id: s.customerId }, data: { totalSpent: { increment: s.total }, lastPurchase: now } });
-      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'MARK_PAID', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total, paymentMethod } } });
+      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'MARK_PAID', entity: 'sale', entityId: s.id, details: { receiptNumber: s.receiptNumber, total: s.total, paymentMethod: selectedPaymentMethod } } });
       return paid;
     });
     res.json({ success: true, data: updated, message: 'Invoice marked as paid' });
@@ -423,7 +439,7 @@ router.post('/:id/payment', async (req: AuthenticatedRequest, res, next) => {
     if (sale.status === 'COMPLETED') throw new AppError('This transaction is already fully paid', 400);
     if (sale.status !== 'PENDING') throw new AppError('Cannot take a payment for this transaction', 400);
 
-    const method = (typeof req.body.paymentMethod === 'string' && req.body.paymentMethod) || sale.paymentMethod || 'CASH';
+    const method = resolvePaymentMethod(req.body.paymentMethod, sale.paymentMethod);
     const previouslyPaid = paidSoFar(sale);
     const outstanding = roundToTwoDecimals(Math.max(roundToTwoDecimals(sale.total) - previouslyPaid, 0));
     const rawAmount = req.body.amount;

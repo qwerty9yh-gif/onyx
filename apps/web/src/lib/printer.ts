@@ -1,5 +1,6 @@
 import { qrMatrix, qrSvgDataUrl } from './qr';
 import type { PaymentMethod } from './types';
+import { paymentMethodLabel } from './helpers';
 
 const VENUE_NAME = 'ONYX LOUNGE / PUB';
 const VENUE_LOCATION = 'Mallam Gbawe';
@@ -347,7 +348,7 @@ export function printReceipt(receipt: ReceiptData): void {
         ${receipt.waiter ? `<tr><td>Waiter</td><td>${receipt.waiter}</td></tr>` : ''}
         ${receipt.customer ? `<tr><td>Customer</td><td>${receipt.customer}</td></tr>` : ''}
         ${receipt.customerNote ? `<tr><td>Order note</td><td>${receipt.customerNote}</td></tr>` : ''}
-        <tr><td>Payment</td><td>${receipt.paymentMethod}</td></tr>
+        <tr><td>Payment</td><td>${paymentMethodLabel(receipt.paymentMethod)}</td></tr>
       </table>
       <table class="items">
         <thead><tr><th>Item</th><th class="c">Qty</th><th class="r">Price</th><th class="r">Total</th></tr></thead>
@@ -491,7 +492,7 @@ export function printDailyReport(report: DailyReportPrintData, targetWindow?: Wi
       </table>
       <h2>Payment Breakdown</h2>
       <table><thead><tr><th>Method</th><th class="r">Amount</th><th class="r">Share</th></tr></thead>
-        <tbody>${report.payments.map((payment) => `<tr><td>${esc(payment.method === 'MOMO' ? 'MoMo' : payment.method)}</td><td class="r">${fm(payment.amount)}</td><td class="r">${payment.percentage.toFixed(2)}%</td></tr>`).join('')}</tbody>
+        <tbody>${report.payments.map((payment) => `<tr><td>${esc(paymentMethodLabel(payment.method))}</td><td class="r">${fm(payment.amount)}</td><td class="r">${payment.percentage.toFixed(2)}%</td></tr>`).join('')}</tbody>
       </table>
       <div class="qr"><img src="${qr}" alt="ONYX report QR code" width="96" height="96" /></div>
       <footer>ONYX LOUNGE / PUB · mallam gbawe</footer>

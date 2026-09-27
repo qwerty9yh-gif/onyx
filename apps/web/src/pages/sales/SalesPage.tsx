@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useSearchParams } from 'react-router-dom';
-import { Banknote, CheckCircle, CreditCard, FileText, Minus, Phone, Plus, Printer, Search, Send, ShoppingCart, Trash2, UserRound, Wifi, WifiOff } from 'lucide-react';
+import { Banknote, CheckCircle, FileText, Landmark, Minus, Phone, Plus, Printer, Search, Send, ShoppingCart, Smartphone, Trash2, UserRound, Wifi, WifiOff } from 'lucide-react';
 import { api, handleApiError, sendSmsInvoice } from '../../lib/api';
 import { money, paymentSummary } from '../../lib/helpers';
 import type { PaymentMethod, Product, Sale, User } from '../../lib/types';
@@ -18,6 +18,12 @@ interface CartItem {
   quantity: number;
   taxRate: number;
 }
+
+const PAYMENT_OPTIONS = [
+  { method: 'CASH', label: 'Cash', icon: Banknote },
+  { method: 'TRANSFER', label: 'MoMo', icon: Smartphone },
+  { method: 'MOMO', label: 'Bank Transfer', icon: Landmark },
+] as const;
 
 interface StaffMember {
   id: string;
@@ -548,12 +554,12 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
               <div className="flex justify-between"><span>Remaining</span><strong className={mergedRemaining > 0 ? 'text-brand-700' : 'text-emerald-600'}>{money(mergedRemaining)}</strong></div>
             </div>
           )}
-          <div className="mt-5 grid grid-cols-2 gap-2">
-            {(['CASH', 'MOMO', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
+          <div className="mt-5 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            {PAYMENT_OPTIONS.map(({ method, label, icon: Icon }) => (
               <button type="button" key={method} onClick={() => setPaymentMethod(method)}
                 className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-red-50 text-brand-700'}`}>
-                {method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}
-                {method === 'MOMO' ? 'MoMo' : method}
+                <Icon className="mx-auto mb-1" size={18} />
+                {label}
               </button>
             ))}
           </div>

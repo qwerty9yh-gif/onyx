@@ -8,7 +8,7 @@ import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { printInvoice, printReceipt, type InvoiceData, type ReceiptData } from '../../lib/printer';
 import type { Sale } from '../../lib/types';
-import { money, paymentSummary } from '../../lib/helpers';
+import { money, paymentMethodLabel, PAYMENT_METHOD_OPTIONS, paymentSummary } from '../../lib/helpers';
 
 type Tab = 'paid' | 'unpaid' | 'closed';
 
@@ -204,7 +204,7 @@ const list = useMemo(() => sales
             <strong className="text-lg text-slate-900">{money(sale.total)}</strong>
           </div>
           <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500">
-            <span>{sale.items?.reduce((count, item) => count + item.quantity, 0) || 0} items · {sale.paymentMethod}</span>
+            <span>{sale.items?.reduce((count, item) => count + item.quantity, 0) || 0} items · {paymentMethodLabel(sale.paymentMethod)}</span>
             {sale.waiter && <span className="inline-flex items-center gap-1"><UserRound size={13} />Waiter: {sale.waiter.firstName} {sale.waiter.lastName}</span>}
             {(sale.customerPhone || sale.customer?.phone) && <span className="inline-flex items-center gap-1"><Phone size={13} />{sale.customerPhone || sale.customer?.phone}</span>}
             {sale.customerNote && <span className="inline-flex items-center gap-1 font-semibold text-brand-700">Note: {sale.customerNote}</span>}
@@ -276,7 +276,7 @@ return <div className="mx-auto max-w-6xl space-y-6">
               <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">{isPaid(selected) ? 'Receipt' : 'Invoice'}: <span className="font-semibold text-slate-800">{selected.receiptNumber}</span></div>
               <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Date: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleDateString()}</span></div>
               <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Time: <span className="font-semibold text-slate-800">{new Date(selected.createdAt).toLocaleTimeString()}</span></div>
-              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Payment: <span className="font-semibold text-slate-800">{selected.paymentMethod}</span></div>
+              <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Payment: <span className="font-semibold text-slate-800">{paymentMethodLabel(selected.paymentMethod)}</span></div>
               <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Waiter: <span className="font-semibold text-slate-800">{selected.waiter ? `${selected.waiter.firstName} ${selected.waiter.lastName}` : '—'}</span></div>
               <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-slate-500">Cashier: <span className="font-semibold text-slate-800">{selected.cashier ? `${selected.cashier.firstName} ${selected.cashier.lastName}` : '—'}</span></div>
               {selected.customerNote && <div className="rounded-xl bg-red-50/60 px-2.5 py-1.5 text-xs text-slate-500">Note: <span className="font-semibold text-slate-800">{selected.customerNote}</span></div>}
@@ -327,7 +327,7 @@ return <div className="mx-auto max-w-6xl space-y-6">
                 </label>
                 <p className="text-xs text-slate-500">Leaving it blank pays the full remaining {money(paymentSummary(selected).remaining)}. Payments add up — earlier payments are never reset.</p>
                 <label className="block text-sm font-semibold text-slate-700">Payment method
-                  <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-red-100 bg-white px-3 outline-none focus:ring-2 focus:ring-red-300"><option>CASH</option><option>CARD</option><option>TRANSFER</option><option>QR</option></select>
+                  <select value={paymentMethod} onChange={(event) => setPaymentMethod(event.target.value)} className="mt-2 h-12 w-full rounded-2xl border border-red-100 bg-white px-3 outline-none focus:ring-2 focus:ring-red-300">{PAYMENT_METHOD_OPTIONS.map(({ method, label }) => <option key={method} value={method}>{label}</option>)}</select>
                 </label>
                 {error && <p className="text-sm text-red-600">{error}</p>}
               </div>

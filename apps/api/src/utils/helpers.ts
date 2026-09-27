@@ -3,6 +3,20 @@ import jwt from 'jsonwebtoken';
 import { randomUUID } from 'crypto';
 import { config } from '../config/index.js';
 
+const PAYMENT_METHOD_LABELS: Record<string, string> = {
+  CASH: 'Cash',
+  MOMO: 'Bank Transfer',
+  TRANSFER: 'MoMo',
+  CARD: 'Card',
+  QR: 'QR',
+  OTHER: 'Other',
+};
+
+export function paymentMethodLabel(method: string | null | undefined): string {
+  if (!method) return 'Unknown';
+  return PAYMENT_METHOD_LABELS[method] || method.replace(/_/g, ' ');
+}
+
 export function generateId(): string {
   return randomUUID();
 }

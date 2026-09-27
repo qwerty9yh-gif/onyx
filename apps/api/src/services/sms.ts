@@ -1,5 +1,6 @@
 import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
+import { paymentMethodLabel } from '../utils/helpers.js';
 
 /**
  * Hubtel SMS integration (outbound).
@@ -141,7 +142,7 @@ export function buildSmsReceipt(sale: {
   if (sale.customerName) lines.push('Customer: ' + sale.customerName);
   lines.push('Total: ' + fmtGhs(sale.total));
   if (typeof sale.amountPaid === 'number') lines.push('Paid: ' + fmtGhs(sale.amountPaid));
-  if (sale.paymentMethod) lines.push('Payment: ' + sale.paymentMethod);
+  if (sale.paymentMethod) lines.push('Payment: ' + paymentMethodLabel(sale.paymentMethod));
   if (typeof sale.change === 'number' && sale.change > 0) lines.push('Change: ' + fmtGhs(sale.change));
   if (sale.items && sale.items.length) {
     for (const it of sale.items.slice(0, 5)) {

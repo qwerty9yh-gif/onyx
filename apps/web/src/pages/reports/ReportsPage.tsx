@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft, CalendarDays, Eye, Printer } from 'lucide-react';
 import { api } from '../../lib/api';
 import { Button } from '../../components/ui/Button';
-import { money } from '../../lib/helpers';
+import { money, paymentMethodLabel } from '../../lib/helpers';
 import { printDailyReport, printReport, type DailyReportPrintData, type ReportData } from '../../lib/printer';
 
 type ReportsView = 'summary' | 'daily' | 'detail';
@@ -83,7 +83,7 @@ export const ReportsPage: React.FC = () => {
   // --- Payment summary ---
   const byPayment = salesMeta.byPayment || [];
   const paymentsList: Array<{ method: string; amount: number }> = byPayment.map((p: any) => ({
-    method: p.method === 'MOMO' ? 'MoMo' : (p.method || 'UNKNOWN').replace(/_/g, ' '),
+    method: paymentMethodLabel(p.method || 'UNKNOWN'),
     amount: Number(p._sum?.amount || 0),
   }));
 
@@ -260,7 +260,7 @@ export const ReportsPage: React.FC = () => {
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
                     <thead><tr className="border-b border-slate-200"><th className="py-2 text-left">Method</th><th className="py-2 text-right">Amount</th><th className="py-2 text-right">Share</th></tr></thead>
-                    <tbody>{selectedPrintData.payments.map((payment) => <tr key={payment.method} className="border-b border-slate-100"><td className="py-2">{payment.method === 'MOMO' ? 'MoMo' : payment.method}</td><td className="py-2 text-right">{money(payment.amount)}</td><td className="py-2 text-right">{payment.percentage.toFixed(2)}%</td></tr>)}</tbody>
+                    <tbody>{selectedPrintData.payments.map((payment) => <tr key={payment.method} className="border-b border-slate-100"><td className="py-2">{paymentMethodLabel(payment.method)}</td><td className="py-2 text-right">{money(payment.amount)}</td><td className="py-2 text-right">{payment.percentage.toFixed(2)}%</td></tr>)}</tbody>
                   </table>
                 </div>
               </section>
