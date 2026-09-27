@@ -6,6 +6,62 @@ import { getBusinessDate, getBusinessDayRange } from '../utils/businessDay.js';
 
 const router = Router();
 
+type DailyReportArchive = {
+  details: unknown;
+  cashTotal: number;
+  momoTotal: number;
+  bankTransferTotal: number;
+};
+
+function normalizeDailyReport<T extends DailyReportArchive>(archive: T): T {
+  const details = archive.details && typeof archive.details === 'object' && !Array.isArray(archive.details)
+    ? archive.details as Record<string, unknown>
+    : {};
+  const summary = details.summary && typeof details.summary === 'object' && !Array.isArray(details.summary)
+    ? details.summary as Record<string, unknown>
+    : {};
+  const archivedPayments = Array.isArray(details.payments) ? details.payments : [];
+  const paymentCents = new Map<string, number>();
+
+  for (const value of archivedPayments) {
+    if (!value || typeof value !== 'object') continue;
+    const payment = value as Record<string, unknown>;
+    const originalMethod = typeof payment.method === 'string' ? payment.method : 'OTHER';
+    const method = originalMethod === 'TRANSFER' || originalMethod === 'MOMO' ? 'MOMO' : originalMethod;
+    const cents = Math.round((Number(payment.amount) || 0) * 100);
+    paymentCents.set(method, (paymentCents.get(method) || 0) + cents);
+  }
+
+  const paymentTotalCents = [...paymentCents.values()].reduce((sum, cents) => sum + cents, 0);
+  const payments = [...paymentCents.entries()].map(([method, cents]) => ({
+    method,
+    amount: cents / 100,
+    percentage: paymentTotalCents > 0 ? Math.round((cents / paymentTotalCents) * 10000) / 100 : 0,
+  }));
+  const paymentSnapshotExists = archivedPayments.length > 0;
+  const cashTotal = paymentSnapshotExists
+    ? (paymentCents.get('CASH') || 0) / 100
+    : Number(summary.cashTotal ?? archive.cashTotal) || 0;
+  const momoTotal = paymentSnapshotExists
+    ? (paymentCents.get('MOMO') || 0) / 100
+    : Number(summary.momoTotal ?? archive.momoTotal) || 0;
+  const bankTransferTotal = paymentSnapshotExists
+    ? (paymentCents.get('BANK_TRANSFER') || 0) / 100
+    : Number(summary.bankTransferTotal ?? archive.bankTransferTotal) || 0;
+
+  return {
+    ...archive,
+    cashTotal,
+    momoTotal,
+    bankTransferTotal,
+    details: {
+      ...details,
+      summary: { ...summary, cashTotal, momoTotal, bankTransferTotal },
+      payments,
+    },
+  } as T;
+}
+
 async function getInventoryValuation(): Promise<{ totalValue: number; totalCost: number }> {
   const [valuation] = await prisma.$queryRaw<Array<{ totalValue: number; totalCost: number }>>`
     SELECT
@@ -93,9 +149,10 @@ router.get('/daily', async (_req: AuthenticatedRequest, res, next) => {
         unpaidCount: true,
         itemCount: true,
         generatedAt: true,
+        details: true,
       },
     });
-    res.json({ success: true, data: reports });
+    res.json({ success: true, data: reports.map((report) => normalizeDailyReport(report)) });
   } catch (err) {
     next(err);
   }
@@ -112,7 +169,7 @@ router.get('/daily/:businessDate', async (req: AuthenticatedRequest, res, next) 
       res.status(404).json({ success: false, error: 'Daily report not found' });
       return;
     }
-    res.json({ success: true, data: report });
+    res.json({ success: true, data: normalizeDailyReport(report) });
   } catch (err) {
     next(err);
   }
