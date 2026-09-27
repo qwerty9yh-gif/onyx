@@ -140,7 +140,7 @@ export async function calculateReportRange(
       )
       SELECT si."productId", si.name,
         GREATEST(SUM(si.quantity - COALESCE(ri.quantity, 0)), 0)::int AS quantity,
-        ROUND((SUM(ROUND(si.unitPrice::numeric, 2) * (si.quantity - COALESCE(ri.quantity, 0))) /
+        ROUND((SUM(ROUND(si."unitPrice"::numeric, 2) * (si.quantity - COALESCE(ri.quantity, 0))) /
           NULLIF(SUM(si.quantity - COALESCE(ri.quantity, 0)), 0))::numeric, 2)::float8 AS "unitPrice",
         ROUND(GREATEST(SUM(ROUND(si.total::numeric, 2) - COALESCE(ri.revenue, 0)), 0), 2)::float8 AS revenue
       FROM "SaleItem" si
@@ -262,19 +262,23 @@ export async function archiveCompletedBusinessDays(now = new Date()): Promise<vo
   }
 }
 
-export function startDailyReportScheduler(): void {
-  const scheduleNextClose = () => {
+export function startDailyReportScheduler(retrySoon = false): void {
+  const scheduleNextClose = (retry = false) => {
     const nextClose = getNextBusinessDayStart(new Date(), TIMEZONE, CUTOFF_HOUR);
-    const delay = Math.max(nextClose.getTime() - Date.now(), 1);
-    const timer = setTimeout(() => {
-      void archiveCompletedBusinessDays()
-        .catch((error) => console.error('Daily report close failed:', error))
-        .finally(scheduleNextClose);
+    const delay = retry ? 60_000 : Math.max(nextClose.getTime() - Date.now(), 1);
+    const timer = setTimeout(async () => {
+      try {
+        await archiveCompletedBusinessDays();
+        scheduleNextClose();
+      } catch (error) {
+        console.error('Daily report close failed; retrying in one minute:', error);
+        scheduleNextClose(true);
+      }
     }, delay);
     timer.unref();
   };
 
-  scheduleNextClose();
+  scheduleNextClose(retrySoon);
 }
 
 export function currentBusinessDayRange(now = new Date()): { businessDate: string; startTime: Date; endTime: Date } {

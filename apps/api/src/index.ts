@@ -105,9 +105,15 @@ const startServer = async () => {
     await prisma.$queryRaw`SELECT 1`;
     console.log('✓ Database connected');
 
-    await archiveCompletedBusinessDays();
-    startDailyReportScheduler();
-    console.log('✓ Daily report archive ready');
+    let archiveReady = true;
+    try {
+      await archiveCompletedBusinessDays();
+    } catch (error) {
+      archiveReady = false;
+      console.error('Daily report catch-up failed; POS will start and retry:', error);
+    }
+    startDailyReportScheduler(!archiveReady);
+    console.log('✓ Daily report scheduler ready');
 
     // Database is the single source of truth for credentials.
     // Only CREATE the default admin when it does not exist yet — never overwrite
