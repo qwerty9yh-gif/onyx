@@ -1,63 +1,116 @@
 import { Router } from 'express';
 import { prisma } from '../utils/prisma.js';
 import { AuthenticatedRequest } from '../types/index.js';
+import { calculateReportRange } from '../services/dailyReports.js';
+import { getBusinessDate, getBusinessDayRange } from '../utils/businessDay.js';
 
 const router = Router();
+
+async function getInventoryValuation(): Promise<{ totalValue: number; totalCost: number }> {
+  const [valuation] = await prisma.$queryRaw<Array<{ totalValue: number; totalCost: number }>>`
+    SELECT
+      ROUND(COALESCE(SUM(p."stockQuantity"::numeric * p."sellingPrice"::numeric), 0), 2)::float8 AS "totalValue",
+      ROUND(COALESCE(SUM(p."stockQuantity"::numeric * p."costPrice"::numeric), 0), 2)::float8 AS "totalCost"
+    FROM "Product" p
+    WHERE p.status = 'ACTIVE'
+  `;
+  return valuation;
+}
 
 // GET /api/reports/sales - Sales report
 router.get('/sales', async (req: AuthenticatedRequest, res, next) => {
   try {
     const now = new Date();
-    const start = new Date(now.getFullYear(), now.getMonth(), 1);
-    start.setHours(0, 0, 0, 0);
-    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+    const businessDate = getBusinessDate(now);
+    const monthStartDate = `${businessDate.slice(0, 7)}-01`;
+    const { startTime } = getBusinessDayRange(monthStartDate);
+    const report = await calculateReportRange(monthStartDate, startTime, now);
     const sales = await prisma.sale.findMany({
       where: {
-        status: { in: ['COMPLETED', 'REFUNDED'] },
-        createdAt: { gte: start, lte: end },
+        createdAt: { gte: startTime, lt: now },
       },
       include: {
         cashier: { select: { firstName: true, lastName: true } },
+        waiter: { select: { firstName: true, lastName: true } },
         items: true,
         payments: true,
         refund: true,
       },
       orderBy: { createdAt: 'desc' },
     });
-    const summary = await prisma.sale.aggregate({
-      where: {
-        status: 'COMPLETED',
-        createdAt: { gte: start, lte: end },
-      },
-      _sum: { total: true, discount: true, tax: true, change: true },
-      _count: true,
-    });
-    const byPayment = await prisma.payment.groupBy({
-      by: ['method'],
-      _sum: { amount: true },
-      where: {
-        sale: {
-          status: 'COMPLETED',
-          createdAt: { gte: start, lte: end },
-        },
-      },
-      orderBy: { _sum: { amount: 'desc' } },
-    });
+    const summary = report.summary;
     res.json({
       success: true,
       data: sales,
       meta: {
-        totalSales: sales.length,
-        totalRevenue: summary._sum.total || 0,
-        totalDiscount: summary._sum.discount || 0,
-        totalTax: summary._sum.tax || 0,
-        totalChange: summary._sum.change || 0,
-        transactionCount: summary._count,
-        avgTransaction: summary._count > 0 ? (summary._sum.total || 0) / summary._count : 0,
-        byPayment,
-        period: { start, end },
+        totalSales: summary.grossSales,
+        grossSales: summary.grossSales,
+        paidTotal: summary.paidTotal,
+        unpaidTotal: summary.unpaidTotal,
+        cashTotal: summary.cashTotal,
+        momoTotal: summary.momoTotal,
+        otherPaidTotal: summary.otherPaidTotal,
+        totalPayments: summary.paymentTotal,
+        totalDiscount: summary.totalDiscount,
+        totalTax: summary.totalTax,
+        totalChange: summary.totalChange,
+        totalRevenue: summary.paidTotal,
+        transactionCount: summary.transactionCount,
+        paidCount: summary.paidCount,
+        unpaidCount: summary.unpaidCount,
+        voidCount: summary.voidCount,
+        refundedCount: summary.refundedCount,
+        totalItemsSold: summary.itemCount,
+        avgTransaction: summary.averageSale,
+        byPayment: report.payments.map((payment) => ({ method: payment.method, _sum: { amount: payment.amount } })),
+        topProducts: report.products.slice(0, 10),
+        period: { start: startTime, end: now },
       },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/daily', async (_req: AuthenticatedRequest, res, next) => {
+  try {
+    const reports = await prisma.dailyReport.findMany({
+      orderBy: { businessDate: 'desc' },
+      select: {
+        id: true,
+        businessDate: true,
+        startTime: true,
+        endTime: true,
+        grossSales: true,
+        paidTotal: true,
+        unpaidTotal: true,
+        cashTotal: true,
+        momoTotal: true,
+        transactionCount: true,
+        paidCount: true,
+        unpaidCount: true,
+        itemCount: true,
+        generatedAt: true,
+      },
+    });
+    res.json({ success: true, data: reports });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get('/daily/:businessDate', async (req: AuthenticatedRequest, res, next) => {
+  try {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(req.params.businessDate)) {
+      res.status(400).json({ success: false, error: 'businessDate must use YYYY-MM-DD' });
+      return;
+    }
+    const report = await prisma.dailyReport.findUnique({ where: { businessDate: req.params.businessDate } });
+    if (!report) {
+      res.status(404).json({ success: false, error: 'Daily report not found' });
+      return;
+    }
+    res.json({ success: true, data: report });
   } catch (err) {
     next(err);
   }
@@ -73,15 +126,18 @@ router.get('/inventory', async (req: AuthenticatedRequest, res, next) => {
       },
       orderBy: { stockQuantity: 'asc' },
     });
-    const summary = await prisma.product.aggregate({
-      where: { status: 'ACTIVE' },
-      _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },
-      _count: true,
-    });
+    const [summary, valuation] = await Promise.all([
+      prisma.product.aggregate({
+        where: { status: 'ACTIVE' },
+        _sum: { stockQuantity: true },
+        _count: true,
+      }),
+      getInventoryValuation(),
+    ]);
     const lowStockProducts = products.filter((p) => p.stockQuantity < 10 && p.stockQuantity > 0);
     const outOfStockProducts = products.filter((p) => p.stockQuantity === 0);
-    const totalValue = (summary._sum.sellingPrice || 0) * 1;
-    const totalCost = (summary._sum.costPrice || 0) * 1;
+    const totalValue = valuation.totalValue;
+    const totalCost = valuation.totalCost;
     res.json({
       success: true,
       data: {
@@ -117,11 +173,11 @@ router.get('/products', async (req: AuthenticatedRequest, res, next) => {
       },
       orderBy: { name: 'asc' },
     });
-    const summary = await prisma.product.aggregate({
+    const [summary, valuation] = await Promise.all([prisma.product.aggregate({
       where: { status: 'ACTIVE' },
-      _sum: { stockQuantity: true, costPrice: true, sellingPrice: true },
+      _sum: { stockQuantity: true },
       _count: true,
-    });
+    }), getInventoryValuation()]);
     const categories = await prisma.category.findMany({
       where: { isActive: true },
       include: {
@@ -143,8 +199,8 @@ router.get('/products', async (req: AuthenticatedRequest, res, next) => {
       meta: {
         totalProducts: summary._count,
         totalStock: summary._sum.stockQuantity || 0,
-        totalInventoryValue: summary._sum.sellingPrice || 0,
-        totalCost: summary._sum.costPrice || 0,
+        totalInventoryValue: valuation.totalValue,
+        totalCost: valuation.totalCost,
         categories: categoryStats,
       },
     });

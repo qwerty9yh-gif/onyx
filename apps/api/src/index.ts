@@ -23,6 +23,7 @@ import { maintenanceRouter } from './routes/maintenance.js';
 import { adminRouter } from './routes/admin.js';
 import { prisma } from './utils/prisma.js';
 import { hashPassword } from './utils/helpers.js';
+import { archiveCompletedBusinessDays, startDailyReportScheduler } from './services/dailyReports.js';
 
 const app = express();
 
@@ -103,6 +104,10 @@ const startServer = async () => {
     // Test database connection
     await prisma.$queryRaw`SELECT 1`;
     console.log('✓ Database connected');
+
+    await archiveCompletedBusinessDays();
+    startDailyReportScheduler();
+    console.log('✓ Daily report archive ready');
 
     // Database is the single source of truth for credentials.
     // Only CREATE the default admin when it does not exist yet — never overwrite

@@ -240,9 +240,30 @@ const PRINT_STYLES = `
   @media print { .sheet { padding: 0; } }
 `;
 
-function printDocument(html: string, title: string): void {
-  const win = window.open('', '_blank', 'width=480,height=820');
-  const documentHtml = `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title><style>${PRINT_STYLES}</style></head><body>${html}</body></html>`;
+const A4_REPORT_STYLES = `
+  * { box-sizing: border-box; }
+  @page { size: A4 portrait; margin: 14mm; }
+  body { margin: 0; color: #161616; background: #fff; font-family: 'Segoe UI', Arial, sans-serif; font-size: 10pt; }
+  .sheet { width: 100%; }
+  header { text-align: center; border-bottom: 2px solid #8b1e25; padding-bottom: 12px; }
+  header h1 { margin: 0; color: #8b1e25; font-size: 22pt; }
+  header .meta { margin-top: 4px; color: #444; line-height: 1.4; }
+  header .doc { margin-top: 10px; font-size: 15pt; font-weight: 700; text-transform: uppercase; }
+  h2 { margin: 18px 0 7px; font-size: 12pt; }
+  table { width: 100%; border-collapse: collapse; page-break-inside: auto; }
+  th, td { padding: 6px 8px; border-bottom: 1px solid #d7d7d7; text-align: left; }
+  th { border-bottom: 2px solid #333; font-size: 9pt; text-transform: uppercase; }
+  .r { text-align: right; }
+  tr { page-break-inside: avoid; }
+  thead { display: table-header-group; }
+  .summary { display: grid; grid-template-columns: 1fr 1fr; gap: 0 22px; }
+  .qr { text-align: center; margin: 18px 0 8px; }
+  footer { text-align: center; color: #444; margin-top: 10px; font-size: 9pt; }
+`;
+
+function printDocument(html: string, title: string, styles = PRINT_STYLES, targetWindow?: Window | null): void {
+  const win = targetWindow ?? window.open('', '_blank', 'width=900,height=1100');
+  const documentHtml = `<!doctype html><html><head><meta charset="utf-8"/><title>${title}</title><style>${styles}</style></head><body>${html}</body></html>`;
 
   if (!win) {
     const frame = document.createElement('iframe');
@@ -389,6 +410,93 @@ export function printReport(data: ReportData): void {
   const fm = (v: number) => `GH₵${(v || 0).toFixed(2)}`;
   const html = `\n    <div class=\"sheet\">\n      <header>\n        <h1>${esc(data.storeName)}</h1>\n        <div class=\"meta\">${esc(data.venueName)}<br/>${esc(data.venueLocation)}<br/>${esc(data.venuePhone)}</div>\n        <div class=\"doc\">${esc(data.title)}</div>\n        <div class=\"meta\">${esc(data.date)}</div>\n      </header>\n\n      <table class=\"infos\">\n        <tr><td>Report type</td><td><strong>${esc(data.title)}</strong></td></tr>\n        <tr><td>Date</td><td>${esc(data.date)}</td></tr>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">A. SALES SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Metric</th><th class=\"r\">Value</th></tr></thead>\n        <tbody>\n          <tr><td>Total Sales</td><td class=\"r\">${fm(data.sales.totalSales)}</td></tr>\n          <tr><td>Total Revenue</td><td class=\"r\">${fm(data.sales.totalRevenue)}</td></tr>\n          <tr><td>Number of Transactions</td><td class=\"r\">${data.sales.transactionCount}</td></tr>\n          <tr><td>Paid Transactions</td><td class=\"r\">${data.sales.paidCount}</td></tr>\n          <tr><td>Unpaid/Pending Transactions</td><td class=\"r\">${data.sales.unpaidCount}</td></tr>\n          <tr><td>Refunded Transactions</td><td class=\"r\">${data.sales.refundedCount}</td></tr>\n          <tr><td>Average Transaction</td><td class=\"r\">${fm(data.sales.avgTransaction)}</td></tr>\n        </tbody>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">B. INVENTORY SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Metric</th><th class=\"r\">Value</th></tr></thead>\n        <tbody>\n          <tr><td>Total Products</td><td class=\"r\">${data.inventory.totalProducts}</td></tr>\n          <tr><td>Total Stock Units</td><td class=\"r\">${data.inventory.totalStock}</td></tr>\n          <tr><td>Total Inventory Value</td><td class=\"r\">${fm(data.inventory.totalValue)}</td></tr>\n          <tr><td>Low Stock Items</td><td class=\"r\">${data.inventory.lowStock}</td></tr>\n          <tr><td>Out-of-Stock Items</td><td class=\"r\">${data.inventory.outOfStock}</td></tr>\n        </tbody>\n      </table>\n\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">C. PAYMENT SUMMARY</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Method</th><th class=\"r\">Amount</th></tr></thead>\n        <tbody>\n          ${data.payments.map((p) => `<tr><td>${esc(p.method)}</td><td class=\"r\">${fm(p.amount)}</td></tr>`).join('')}\n          <tr class=\"sep\"><td colspan=\"2\"></td></tr>\n          <tr class=\"grand\"><td>Total Payments</td><td class=\"r\">${fm(data.payments.reduce((sum, p) => sum + (p.amount || 0), 0))}</td></tr>\n        </tbody>\n      </table>\n\n      ${data.topProducts && data.topProducts.length ? `\n      <h3 style="font-size:18px;font-weight:800;color:#111;margin:18px 0 8px 0;">D. TOP PRODUCTS</h3>\n      <table class=\"items\">\n        <thead><tr><th style="text-align:left;">Item</th><th class=\"c\">Qty</th><th class=\"r\">Unit Price</th><th class=\"r\">Total</th></tr></thead>\n        <tbody>\n          ${data.topProducts.map((item) => `<tr><td>${esc(item.name)}</td><td class=\"c\">${item.quantity}</td><td class=\"r\">${fm(item.unitPrice)}</td><td class=\"r\">${fm(item.total)}</td></tr>`).join('')}\n        </tbody>\n      </table>\n      ` : ''}\n      <div class=\"qr\"><img src=\"${qrSvgDataUrl(`ONYX|${esc(data.title)}|${data.date}`, 6, 4)}\" alt=\"QR\" width=\"120\" height=\"120\" /></div>\n      <footer>Generated ${esc(data.date)} by ONYX POS</footer>\n    </div>`;
   printDocument(html, esc(data.title));
+}
+
+export interface DailyReportPrintData {
+  businessDate: string;
+  startTime: string;
+  endTime: string;
+  generatedAt: string;
+  summary: {
+    grossSales: number;
+    paidTotal: number;
+    unpaidTotal: number;
+    cashTotal: number;
+    momoTotal: number;
+    transactionCount: number;
+    paidCount: number;
+    unpaidCount: number;
+    voidCount: number;
+    refundedCount: number;
+    refundedTotal: number;
+    itemCount: number;
+  };
+  payments: Array<{ method: string; amount: number; percentage: number }>;
+  products: Array<{ productId: string; name: string; quantity: number; revenue: number }>;
+  waiters: Array<{ waiterId: string | null; name: string; orders: number; revenue: number }>;
+}
+
+export function printDailyReport(report: DailyReportPrintData, targetWindow?: Window | null): void {
+  const esc = (value: string) => String(value).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  const dateLabel = new Intl.DateTimeFormat('en-GH', {
+    timeZone: 'Africa/Accra',
+    dateStyle: 'long',
+  }).format(new Date(`${report.businessDate}T12:00:00.000Z`));
+  const generatedLabel = new Intl.DateTimeFormat('en-GH', {
+    timeZone: 'Africa/Accra',
+    dateStyle: 'medium',
+    timeStyle: 'short',
+  }).format(new Date(report.generatedAt));
+  const fm = (value: number) => `GH₵${(Number(value) || 0).toFixed(2)}`;
+  const qr = qrSvgDataUrl(`ONYX|${report.businessDate}|${report.summary.grossSales.toFixed(2)}`, 6, 4);
+  const html = `
+    <div class="sheet">
+      <header>
+        <h1>ONYX LOUNGE / PUB</h1>
+        <div class="meta">mallam gbawe</div>
+        <div class="doc">Daily Business Report</div>
+        <div class="meta">${esc(dateLabel)}</div>
+      </header>
+      <table>
+        <tbody>
+          <tr><th>Business Date</th><td>${esc(dateLabel)}</td></tr>
+          <tr><th>Time Range</th><td>5:00 AM → 4:59 AM (Africa/Accra)</td></tr>
+          <tr><th>Generated</th><td>${esc(generatedLabel)}</td></tr>
+        </tbody>
+      </table>
+      <h2>Sales Summary</h2>
+      <table><tbody>
+        <tr><td>Gross Sales</td><td class="r">${fm(report.summary.grossSales)}</td></tr>
+        <tr><td>Paid Sales</td><td class="r">${fm(report.summary.paidTotal)}</td></tr>
+        <tr><td>Outstanding Unpaid</td><td class="r">${fm(report.summary.unpaidTotal)}</td></tr>
+        <tr><td>Cash</td><td class="r">${fm(report.summary.cashTotal)}</td></tr>
+        <tr><td>MoMo</td><td class="r">${fm(report.summary.momoTotal)}</td></tr>
+      </tbody></table>
+      <h2>Transaction Summary</h2>
+      <table><tbody>
+        <tr><td>Paid Count</td><td class="r">${report.summary.paidCount}</td></tr>
+        <tr><td>Unpaid Count</td><td class="r">${report.summary.unpaidCount}</td></tr>
+        <tr><td>Void Count</td><td class="r">${report.summary.voidCount}</td></tr>
+        <tr><td>Refunded Count / Total</td><td class="r">${report.summary.refundedCount} / ${fm(report.summary.refundedTotal)}</td></tr>
+        <tr><td>Total Orders</td><td class="r">${report.summary.transactionCount}</td></tr>
+        <tr><td>Total Items Sold</td><td class="r">${report.summary.itemCount}</td></tr>
+      </tbody></table>
+      <h2>Product Summary</h2>
+      <table><thead><tr><th>Product</th><th class="r">Quantity</th><th class="r">Revenue</th></tr></thead>
+        <tbody>${report.products.map((product) => `<tr><td>${esc(product.name)}</td><td class="r">${product.quantity}</td><td class="r">${fm(product.revenue)}</td></tr>`).join('')}</tbody>
+      </table>
+      <h2>Waiter Summary</h2>
+      <table><thead><tr><th>Waiter Name</th><th class="r">Orders</th><th class="r">Revenue</th></tr></thead>
+        <tbody>${report.waiters.map((waiter) => `<tr><td>${esc(waiter.name)}</td><td class="r">${waiter.orders}</td><td class="r">${fm(waiter.revenue)}</td></tr>`).join('')}</tbody>
+      </table>
+      <h2>Payment Breakdown</h2>
+      <table><thead><tr><th>Method</th><th class="r">Amount</th><th class="r">Share</th></tr></thead>
+        <tbody>${report.payments.map((payment) => `<tr><td>${esc(payment.method === 'MOMO' ? 'MoMo' : payment.method)}</td><td class="r">${fm(payment.amount)}</td><td class="r">${payment.percentage.toFixed(2)}%</td></tr>`).join('')}</tbody>
+      </table>
+      <div class="qr"><img src="${qr}" alt="ONYX report QR code" width="96" height="96" /></div>
+      <footer>ONYX LOUNGE / PUB · mallam gbawe</footer>
+    </div>`;
+  printDocument(html, `Daily Business Report ${report.businessDate}`, A4_REPORT_STYLES, targetWindow);
 }
 
 export function printInvoice(invoice: InvoiceData): void {

@@ -3,6 +3,7 @@ import { prisma } from '../utils/prisma.js';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthenticatedRequest } from '../types/index.js';
 import { roundToTwoDecimals, calculateTotal, generateReceiptNumber, generateInvoiceNumber, generateIdempotencyKey, generateLocalId } from '../utils/helpers.js';
+import { getBusinessDate } from '../utils/businessDay.js';
 
 const router = Router();
 
@@ -76,15 +77,12 @@ router.post('/daily-reset', async (req: AuthenticatedRequest, res, next) => {
   try {
     if (!['ADMIN', 'MANAGER'].includes(req.user!.role)) throw new AppError('Forbidden', 403);
     const pending = await prisma.sale.findMany({ where: { status: 'PENDING' }, select: { id: true, receiptNumber: true, total: true } });
-    const result = await prisma.$transaction(async (tx) => {
-      for (const sale of pending) {
-        await tx.auditLog.create({ data: { userId: req.user!.id, action: 'ARCHIVE_DAILY_TRANSACTION', entity: 'sale', entityId: sale.id, details: { receiptNumber: sale.receiptNumber, total: sale.total } } });
-        await tx.sale.update({ where: { id: sale.id }, data: { status: 'VOIDED', voidedAt: new Date(), notes: 'Archived during daily reset' } });
-      }
-      await tx.auditLog.create({ data: { userId: req.user!.id, action: 'DAILY_RESET', entity: 'sales', entityId: null, details: { archivedCount: pending.length } } });
-      return pending.length;
+    const pendingCount = await prisma.sale.count({ where: { status: 'PENDING' } });
+    res.json({
+      success: true,
+      data: { archived: 0, pendingCount, businessDate: getBusinessDate(new Date()), resetAt: new Date().toISOString() },
+      message: 'Business close preserves all transactions; unpaid orders remain open until paid',
     });
-    res.json({ success: true, data: { archived: result, resetAt: new Date().toISOString() }, message: 'Pending transactions archived and active shift reset' });
   } catch (err) { next(err); }
 });
 

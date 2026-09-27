@@ -549,11 +549,11 @@ const subtotal = useMemo(() => cart.reduce((sum, item) => sum + item.unitPrice *
             </div>
           )}
           <div className="mt-5 grid grid-cols-2 gap-2">
-            {(['CASH', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
+            {(['CASH', 'MOMO', 'CARD', 'TRANSFER', 'QR'] as PaymentMethod[]).map((method) => (
               <button type="button" key={method} onClick={() => setPaymentMethod(method)}
                 className={`rounded-2xl px-3 py-3 text-sm font-bold transition ${paymentMethod === method ? 'onyx-brand-gradient text-white shadow-glow-red' : 'bg-red-50 text-brand-700'}`}>
                 {method === 'CASH' ? <Banknote className="mx-auto mb-1" size={18} /> : <CreditCard className="mx-auto mb-1" size={18} />}
-                {method}
+                {method === 'MOMO' ? 'MoMo' : method}
               </button>
             ))}
           </div>

@@ -2,7 +2,7 @@ export type UserRole = 'ADMIN' | 'MANAGER' | 'CASHIER' | 'WORKER' | 'WAITER' | '
 export type UserStatus = 'ACTIVE' | 'DISABLED' | 'INVITED';
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'DISCONTINUED' | 'OUT_OF_STOCK';
 export type TransactionStatus = 'PENDING' | 'COMPLETED' | 'VOIDED' | 'REFUNDED';
-export type PaymentMethod = 'CASH' | 'CARD' | 'TRANSFER' | 'QR' | 'OTHER';
+export type PaymentMethod = 'CASH' | 'MOMO' | 'CARD' | 'TRANSFER' | 'QR' | 'OTHER';
 export type PurchaseStatus = 'PENDING' | 'ORDERED' | 'RECEIVED' | 'PARTIAL' | 'CANCELLED';
 export type MovementType = 'STOCK_IN' | 'STOCK_OUT' | 'ADJUSTMENT' | 'SALE' | 'REFUND';
 
